@@ -1,0 +1,32 @@
+# Swift build output and local app bundles
+.build/
+.swiftpm/
+dist/
+DerivedData/
+*.xcarchive
+*.dSYM/
+
+# Generated icon sizes (source PNG and packaged ICNS are versioned)
+Resources/AppIcon.iconset/
+
+# Machine-specific editor and OS files
+.DS_Store
+.vscode/
+xcuserdata/
+*.xcuserstate
+
+# Local credentials, signing material and runtime data
+.env
+.env.*
+!.env.example
+*.p12
+*.pfx
+*.key
+*.pem
+*.mobileprovision
+*.provisionprofile
+*.sqlite
+*.sqlite-*
+*.db
+*.db-*
+*.log
