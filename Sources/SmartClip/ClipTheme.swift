@@ -3,10 +3,12 @@ import SwiftUI
 
 enum ClipTheme {
     static let accent = adaptive(light: 0x237B70, dark: 0x72CDBB)
-    static let canvas = adaptive(light: 0xF5F6F5, dark: 0x202423)
-    static let surface = adaptive(light: 0xFFFFFF, dark: 0x2A2F2D)
-    static let sidebar = adaptive(light: 0xEBEEEC, dark: 0x1C201F)
-    static let line = Color.primary.opacity(0.08)
+    static let canvas = adaptive(light: 0xF3F5F4, dark: 0x1B1F1E)
+    static let surface = adaptive(light: 0xFFFFFF, dark: 0x262B29)
+    static let sidebar = adaptive(light: 0xE9EDEB, dark: 0x171B1A)
+    static let line = Color.primary.opacity(0.075)
+    static let subtleFill = Color.primary.opacity(0.045)
+    static let selection = accent.opacity(0.11)
 
     private static func adaptive(light: UInt32, dark: UInt32) -> Color {
         Color(nsColor: NSColor(name: nil) { appearance in
@@ -38,21 +40,43 @@ struct BrandMark: View {
             .font(.system(size: size * 0.49, weight: .semibold))
             .foregroundStyle(.white)
             .frame(width: size, height: size)
-            .background(Color(red: 0.14, green: 0.48, blue: 0.43),
-                        in: RoundedRectangle(cornerRadius: size * 0.29))
+            .background(
+                LinearGradient(colors: [Color(red: 0.17, green: 0.55, blue: 0.49),
+                                        Color(red: 0.10, green: 0.39, blue: 0.35)],
+                               startPoint: .topLeading, endPoint: .bottomTrailing),
+                in: RoundedRectangle(cornerRadius: size * 0.29, style: .continuous)
+            )
+            .shadow(color: ClipTheme.accent.opacity(0.18), radius: 7, y: 3)
             .accessibilityHidden(true)
     }
 }
 
 struct IconControlStyle: ButtonStyle {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.system(size: 13, weight: .medium))
             .foregroundStyle(.secondary)
             .frame(width: 30, height: 30)
-            .background(configuration.isPressed ? Color.primary.opacity(0.09) : .clear,
-                        in: RoundedRectangle(cornerRadius: 7))
-            .contentShape(RoundedRectangle(cornerRadius: 7))
+            .background(configuration.isPressed ? Color.primary.opacity(0.10) : .clear,
+                        in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .scaleEffect(configuration.isPressed ? 0.94 : 1)
+            .animation(reduceMotion ? nil : .spring(response: 0.22, dampingFraction: 1),
+                       value: configuration.isPressed)
+            .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+    }
+}
+
+struct ResponsiveButtonStyle: ButtonStyle {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.985 : 1)
+            .opacity(configuration.isPressed ? 0.82 : 1)
+            .animation(reduceMotion ? nil : .spring(response: 0.22, dampingFraction: 1),
+                       value: configuration.isPressed)
     }
 }
 
@@ -63,8 +87,8 @@ struct KeyboardHint: View {
             .font(.system(size: 10, weight: .medium, design: .monospaced))
             .foregroundStyle(.secondary)
             .padding(.horizontal, 5).padding(.vertical, 3)
-            .background(Color.primary.opacity(0.045), in: RoundedRectangle(cornerRadius: 4))
-            .overlay(RoundedRectangle(cornerRadius: 4).strokeBorder(ClipTheme.line))
+            .background(ClipTheme.subtleFill, in: RoundedRectangle(cornerRadius: 5, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 5, style: .continuous).strokeBorder(ClipTheme.line))
     }
 }
 

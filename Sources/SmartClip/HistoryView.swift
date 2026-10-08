@@ -3,6 +3,8 @@ import SwiftUI
 
 struct HistoryView: View {
     @ObservedObject var model: AppModel
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @FocusState private var searchFocused: Bool
     @State private var selectedID: UUID?
 
@@ -13,10 +15,7 @@ struct HistoryView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            header
-            searchField.padding(.horizontal, 20)
-            filters.padding(.horizontal, 20).padding(.top, 14).padding(.bottom, 16)
-            Rectangle().fill(ClipTheme.line).frame(height: 1)
+            topBar
             if model.items.isEmpty {
                 emptyState
             } else {
@@ -41,6 +40,23 @@ struct HistoryView: View {
         .onChange(of: model.items.map(\.id)) { _, ids in
             if let selectedID, !ids.contains(selectedID) { self.selectedID = nil }
         }
+        .animation(reduceMotion ? nil : .spring(response: 0.34, dampingFraction: 1), value: model.cardView)
+        .animation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 1), value: model.filter)
+    }
+
+    private var topBar: some View {
+        VStack(spacing: 0) {
+            header
+            searchField.padding(.horizontal, 20)
+            filters.padding(.horizontal, 20).padding(.top, 11).padding(.bottom, 13)
+        }
+        .background { chromeBackground }
+        .shadow(color: .black.opacity(0.055), radius: 10, y: 4)
+        .zIndex(1)
+    }
+
+    @ViewBuilder private var chromeBackground: some View {
+        if reduceTransparency { ClipTheme.surface } else { Rectangle().fill(.ultraThinMaterial) }
     }
 
     private var header: some View {
@@ -56,12 +72,12 @@ struct HistoryView: View {
                 viewButton("Karten", symbol: "rectangle.grid.1x2", cards: true)
             }
             .padding(3)
-            .background(Color.primary.opacity(0.045), in: RoundedRectangle(cornerRadius: 9))
+            .background(ClipTheme.subtleFill, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
             Button { model.onOpenSettings?() } label: { Image(systemName: "gearshape") }
                 .buttonStyle(IconControlStyle()).help("Einstellungen")
                 .accessibilityLabel("Einstellungen öffnen")
         }
-        .padding(20)
+        .padding(.horizontal, 20).padding(.top, 16).padding(.bottom, 14)
     }
 
     private func viewButton(_ title: String, symbol: String, cards: Bool) -> some View {
@@ -73,7 +89,7 @@ struct HistoryView: View {
                 .background(model.cardView == cards ? ClipTheme.surface : .clear,
                             in: RoundedRectangle(cornerRadius: 6))
         }
-        .buttonStyle(.plain).help(title).accessibilityLabel(title)
+        .buttonStyle(ResponsiveButtonStyle()).help(title).accessibilityLabel(title)
         .accessibilityAddTraits(model.cardView == cards ? .isSelected : [])
     }
 
@@ -100,10 +116,12 @@ struct HistoryView: View {
                 KeyboardHint(text: shortcut.display)
             }
         }
-        .padding(.horizontal, 13).frame(height: 43)
-        .background(ClipTheme.surface, in: RoundedRectangle(cornerRadius: 10))
-        .overlay(RoundedRectangle(cornerRadius: 10)
-            .strokeBorder(searchFocused ? ClipTheme.accent.opacity(0.5) : ClipTheme.line))
+        .padding(.horizontal, 12).frame(height: 38)
+        .background(ClipTheme.surface.opacity(reduceTransparency ? 1 : 0.82),
+                    in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous)
+            .strokeBorder(searchFocused ? ClipTheme.accent.opacity(0.45) : ClipTheme.line))
+        .shadow(color: searchFocused ? ClipTheme.accent.opacity(0.08) : .clear, radius: 5)
     }
 
     private var filters: some View {
@@ -126,12 +144,12 @@ struct HistoryView: View {
                 Image(systemName: symbol).font(.system(size: 10, weight: .medium))
                 Text(title).font(.system(size: 11, weight: active ? .semibold : .medium))
             }
-            .padding(.horizontal, 9).padding(.vertical, 7)
-            .foregroundStyle(active ? ClipTheme.accent : Color.secondary)
-            .background(active ? ClipTheme.accent.opacity(0.10) : .clear,
-                        in: RoundedRectangle(cornerRadius: 7))
+            .padding(.horizontal, 10).padding(.vertical, 6)
+            .foregroundStyle(active ? Color.white : Color.secondary)
+            .background(active ? ClipTheme.accent : .clear,
+                        in: RoundedRectangle(cornerRadius: 8, style: .continuous))
         }
-        .buttonStyle(.plain).accessibilityAddTraits(active ? .isSelected : [])
+        .buttonStyle(ResponsiveButtonStyle()).accessibilityAddTraits(active ? .isSelected : [])
     }
 
     @ViewBuilder private func entrySection(_ title: String, pinned: Bool) -> some View {
@@ -226,9 +244,7 @@ struct HistoryView: View {
                 }
                 .font(.system(size: 11)).foregroundStyle(.secondary)
                 .padding(.horizontal, 20).padding(.vertical, 9)
-                .background(ClipTheme.surface)
             }
-            Rectangle().fill(ClipTheme.line).frame(height: 1)
             HStack(spacing: 7) {
                 Circle().fill(model.captureState == .active ? ClipTheme.accent : Color.orange)
                     .frame(width: 6, height: 6).accessibilityHidden(true)
@@ -266,6 +282,9 @@ struct HistoryView: View {
             }
             .padding(.horizontal, 20).frame(height: 42)
         }
+        .background { chromeBackground }
+        .shadow(color: .black.opacity(0.06), radius: 10, y: -4)
+        .zIndex(1)
     }
 
     private func moveSelection(_ offset: Int) {
@@ -341,7 +360,7 @@ private struct ClipRow: View {
                 }
                 .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
+            .buttonStyle(ResponsiveButtonStyle())
             .accessibilityLabel("\(item.favoriteName.map { "\($0), " } ?? "")\(item.kind.label): \(item.isSensitive ? "sensibler Eintrag" : item.preview)")
             .accessibilityAddTraits(selected ? .isSelected : [])
             VStack(alignment: .trailing, spacing: 7) {
@@ -350,7 +369,7 @@ private struct ClipRow: View {
                         Image(systemName: item.isPinned ? "pin.fill" : "pin")
                             .font(.system(size: 11)).frame(width: 24, height: 24)
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(IconControlStyle())
                     .foregroundStyle(item.isPinned ? ClipTheme.accent : Color.secondary)
                     .opacity(item.isPinned || hovered || selected ? 1 : 0.65)
                     .help(item.isPinned ? "Lösen" : "Anheften")
@@ -364,11 +383,12 @@ private struct ClipRow: View {
         }
         .padding(card ? 15 : 12)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(selected ? ClipTheme.accent.opacity(0.065)
-                    : card ? ClipTheme.surface : hovered ? Color.primary.opacity(0.025) : .clear,
-                    in: RoundedRectangle(cornerRadius: 11))
-        .overlay(RoundedRectangle(cornerRadius: 11)
-            .strokeBorder(selected ? ClipTheme.accent.opacity(0.3) : card ? ClipTheme.line : .clear))
+        .background(selected ? ClipTheme.selection
+                    : card ? ClipTheme.surface : hovered ? ClipTheme.surface.opacity(0.72) : .clear,
+                    in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
+            .strokeBorder(selected ? ClipTheme.accent.opacity(0.34) : card ? ClipTheme.line : .clear))
+        .shadow(color: card ? .black.opacity(0.035) : .clear, radius: 5, y: 2)
         .onHover { hovered = $0 }
         .confirmationDialog("Länger speichern?", isPresented: $confirmUnmark) {
             Button("Als normal einstufen") { model.markSensitive(item, false) }

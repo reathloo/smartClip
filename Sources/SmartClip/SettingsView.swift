@@ -22,6 +22,8 @@ enum SettingsTab: String, CaseIterable, Identifiable {
 
 struct SettingsView: View {
     @ObservedObject var model: AppModel
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @State private var tab: SettingsTab
     @State private var newExcludedBundle = ""
 
@@ -33,19 +35,22 @@ struct SettingsView: View {
     var body: some View {
         HStack(spacing: 0) {
             sidebar
-            Rectangle().fill(ClipTheme.line).frame(width: 1)
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
                     VStack(alignment: .leading, spacing: 5) {
-                        Text(tab.rawValue).font(.system(size: 23, weight: .semibold))
+                        Text(tab.rawValue).font(.system(size: 24, weight: .semibold))
                         Text(tab.subtitle).font(.system(size: 12)).foregroundStyle(.secondary)
                     }
                     .padding(.bottom, 3)
-                    switch tab {
-                    case .general: generalSettings
-                    case .history: historySettings
-                    case .privacy: privacySettings
+                    Group {
+                        switch tab {
+                        case .general: generalSettings
+                        case .history: historySettings
+                        case .privacy: privacySettings
+                        }
                     }
+                    .id(tab)
+                    .transition(.opacity)
                     if !model.statusMessage.isEmpty {
                         HStack(alignment: .top, spacing: 8) {
                             Label(model.statusMessage, systemImage: "info.circle")
@@ -59,7 +64,7 @@ struct SettingsView: View {
                         }
                     }
                 }
-                .padding(28)
+                .padding(.horizontal, 30).padding(.vertical, 26)
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
             .background(ClipTheme.canvas)
@@ -77,16 +82,18 @@ struct SettingsView: View {
             }
             .padding(.horizontal, 10).padding(.top, 20).padding(.bottom, 27)
             ForEach(SettingsTab.allCases) { item in
-                Button { tab = item } label: {
+                Button {
+                    withAnimation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 1)) { tab = item }
+                } label: {
                     Label(item.rawValue, systemImage: item.symbol)
                         .font(.system(size: 12, weight: tab == item ? .semibold : .regular))
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.horizontal, 11).padding(.vertical, 10)
                         .foregroundStyle(tab == item ? ClipTheme.accent : Color.primary.opacity(0.75))
-                        .background(tab == item ? ClipTheme.accent.opacity(0.1) : .clear,
-                                    in: RoundedRectangle(cornerRadius: 8))
+                        .background(tab == item ? ClipTheme.selection : .clear,
+                                    in: RoundedRectangle(cornerRadius: 9, style: .continuous))
                 }
-                .buttonStyle(.plain).accessibilityAddTraits(tab == item ? .isSelected : [])
+                .buttonStyle(ResponsiveButtonStyle()).accessibilityAddTraits(tab == item ? .isSelected : [])
             }
             Spacer()
             VStack(alignment: .leading, spacing: 5) {
@@ -99,9 +106,12 @@ struct SettingsView: View {
             .padding(.horizontal, 10).padding(.bottom, 20)
         }
         .padding(.horizontal, 12)
-        .frame(width: 166)
+        .frame(width: 176)
         .frame(maxHeight: .infinity)
-        .background(ClipTheme.sidebar)
+        .background {
+            if reduceTransparency { ClipTheme.sidebar } else { Rectangle().fill(.thinMaterial) }
+        }
+        .overlay(alignment: .trailing) { Rectangle().fill(ClipTheme.line).frame(width: 1) }
     }
 
     private var generalSettings: some View {
@@ -317,8 +327,9 @@ private struct SettingsCard<Content: View>: View {
             content
         }
         .padding(18).frame(maxWidth: .infinity, alignment: .leading)
-        .background(ClipTheme.surface, in: RoundedRectangle(cornerRadius: 12))
-        .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(ClipTheme.line))
+        .background(ClipTheme.surface, in: RoundedRectangle(cornerRadius: 13, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 13, style: .continuous).strokeBorder(ClipTheme.line))
+        .shadow(color: .black.opacity(0.035), radius: 8, y: 3)
     }
 }
 
