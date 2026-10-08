@@ -7,12 +7,16 @@ import ServiceManagement
 @MainActor
 final class AppModel: ObservableObject {
     static let shared = AppModel()
-    @Published var items: [ClipSummary] = []
+    @Published var items: [ClipSummary] = [] {
+        didSet { itemsByID = Dictionary(items.map { ($0.id, $0) }, uniquingKeysWith: { _, latest in latest }) }
+    }
+    private var itemsByID: [UUID: ClipSummary] = [:]
     @Published var search = ""
     @Published var filter: ClipKind?
     @Published var cardView: Bool
     @Published var statusMessage = ""
-    @Published var isPaused: Bool
+    @Published private(set) var recoveryAction: RecoveryAction?
+    @Published private(set) var pauseMode: PauseMode
     @Published var shortcut: Shortcut?
     @Published var normalDays: Int
     @Published var sensitiveSeconds: Int
@@ -21,10 +25,24 @@ final class AppModel: ObservableObject {
     @Published var knownApps: [(String, String)] = []
     @Published var onboardingComplete: Bool
     @Published private(set) var storageReady = false
+    @Published private(set) var clipboardAccessDenied = false
+
+    var isPaused: Bool { pauseMode.isPaused }
+    var captureStatusLabel: String { isPaused ? pauseMode.label(now: now()) : captureState.label }
+
+    var captureState: CaptureState {
+        if !storageReady { return .unavailable }
+        if !onboardingComplete { return .setup }
+        if isPaused { return .paused }
+        return clipboardAccessDenied ? .denied : .active
+    }
+
+    func item(for id: UUID) -> ClipSummary? { itemsByID[id] }
 
     private var database: ClipDatabase?
     private var pollTimer: Timer?
     private var purgeTimer: Timer?
+    private var pauseTimer: Timer?
     private var searchTask: Task<Void, Never>?
     private let defaults: UserDefaults
     private let pasteboard: NSPasteboard
@@ -47,7 +65,8 @@ final class AppModel: ObservableObject {
         self.systemIntegrationsEnabled = systemIntegrationsEnabled
         self.lastChangeCount = pasteboard.changeCount
         cardView = defaults.bool(forKey: "cardView")
-        isPaused = defaults.bool(forKey: "paused")
+        pauseMode = defaults.bool(forKey: "paused") ? .manual : .active
+        recoveryAction = nil
         normalDays = defaults.object(forKey: "normalDays") as? Int ?? 30
         sensitiveSeconds = defaults.object(forKey: "sensitiveSeconds") as? Int ?? 3_600
         autoPaste = defaults.bool(forKey: "autoPaste")
@@ -62,7 +81,7 @@ final class AppModel: ObservableObject {
     static func designPreview() -> AppModel {
         let model = AppModel()
         model.cardView = false
-        model.isPaused = false
+        model.pauseMode = .active
         model.onboardingComplete = true
         model.storageReady = true
         model.shortcut = .suggested
@@ -79,7 +98,7 @@ final class AppModel: ObservableObject {
                keyLoader: @escaping @Sendable () throws -> CryptoStore = { try CryptoStore.loadOrCreate() }) async {
         // Keep the menu and shortcut usable while macOS waits for Keychain approval.
         if let shortcut { setShortcut(shortcut) }
-        statusMessage = "Geschützten Verlauf öffnen … gegebenenfalls Schlüsselbund-Freigabe bestätigen."
+        showStatus("Geschützten Verlauf öffnen … gegebenenfalls Schlüsselbund-Freigabe bestätigen.")
         do {
             let crypto = try await Task.detached(priority: .userInitiated) { try keyLoader() }.value
             let url: URL
@@ -93,11 +112,11 @@ final class AppModel: ObservableObject {
             refresh()
             knownApps = try database?.knownApps() ?? []
             storageReady = true
-            statusMessage = "Verlauf bereit."
+            showStatus("Verlauf bereit.")
         } catch {
             database = nil
             storageReady = false
-            statusMessage = "Verlauf konnte nicht geöffnet werden: \(error.localizedDescription)"
+            showStatus("Verlauf konnte nicht geöffnet werden: \(error.localizedDescription)", recovery: .retryStorage)
             return
         }
         pollTimer?.invalidate()
@@ -113,25 +132,36 @@ final class AppModel: ObservableObject {
     isolated deinit {
         pollTimer?.invalidate()
         purgeTimer?.invalidate()
+        pauseTimer?.invalidate()
         searchTask?.cancel()
     }
 
     private func poll() {
-        let app = NSWorkspace.shared.frontmostApplication
+        updateTimedPause()
+        guard onboardingComplete, !isPaused, database != nil else { return }
         let denied: Bool
         if #available(macOS 26, *) { denied = pasteboard.accessBehavior == .alwaysDeny }
         else { denied = false }
+        // Still notice permission changes without a new copy; resolve the app only for new content.
+        guard pasteboard.changeCount != lastChangeCount || denied != clipboardAccessDenied else { return }
+        let app = pasteboard.changeCount != lastChangeCount ? NSWorkspace.shared.frontmostApplication : nil
         processChanges(sourceName: app?.localizedName, sourceBundleID: app?.bundleIdentifier, accessDenied: denied)
     }
 
     /// Shared capture path; tests provide an isolated pasteboard and an explicit source.
     func processChanges(sourceName: String?, sourceBundleID: String?, accessDenied: Bool = false) {
         guard onboardingComplete, !isPaused, let database else { return }
+        if clipboardAccessDenied != accessDenied {
+            clipboardAccessDenied = accessDenied
+            showStatus(accessDenied ? "Zwischenablage-Zugriff ist in den Systemeinstellungen gesperrt."
+                : "Zwischenablage-Zugriff wieder verfügbar.",
+                       recovery: accessDenied ? .openClipboardSettings : nil)
+        }
         let count = pasteboard.changeCount
         guard count != lastChangeCount else { return }
         lastChangeCount = count
         if accessDenied {
-            statusMessage = "Zwischenablage-Zugriff ist in den Systemeinstellungen gesperrt."
+            showStatus("Zwischenablage-Zugriff ist in den Systemeinstellungen gesperrt.", recovery: .openClipboardSettings)
             return
         }
         if let sourceBundleID, excludedBundles.contains(sourceBundleID) { return }
@@ -139,7 +169,7 @@ final class AppModel: ObservableObject {
         switch ClipboardReader.read(pasteboard) {
         case .captured(let payload, let sensitive): captured = (payload, sensitive)
         case .skipped(let reason):
-            if let reason { statusMessage = reason }
+            if let reason { showStatus(reason) }
             return
         }
         do {
@@ -149,13 +179,13 @@ final class AppModel: ObservableObject {
             refresh()
             knownApps = try database.knownApps()
         } catch {
-            statusMessage = error.localizedDescription
+            showStatus(error.localizedDescription)
         }
     }
 
     func refresh() {
         do { items = try database?.list(search: search, kind: filter) ?? [] }
-        catch { statusMessage = error.localizedDescription }
+        catch { showStatus(error.localizedDescription) }
     }
 
     func scheduleSearch() {
@@ -165,6 +195,18 @@ final class AppModel: ObservableObject {
             guard !Task.isCancelled else { return }
             refresh()
         }
+    }
+
+    func applySearchImmediately() {
+        searchTask?.cancel()
+        searchTask = nil
+        refresh()
+    }
+
+    func resetSearch() {
+        search = ""
+        filter = nil
+        applySearchImmediately()
     }
 
     func purge() throws {
@@ -179,17 +221,17 @@ final class AppModel: ObservableObject {
             try purge()
             return try database?.payload(for: id)
         }
-        catch { statusMessage = error.localizedDescription; return nil }
+        catch { showStatus(error.localizedDescription); return nil }
     }
 
     func copy(_ item: ClipSummary) {
         guard let payload = payload(for: item.id) else {
-            statusMessage = "Eintrag ist nicht mehr verfügbar oder bereits abgelaufen."
+            showStatus("Eintrag ist nicht mehr verfügbar oder bereits abgelaufen.")
             return
         }
         if payload.kind == .files,
            !(payload.filePaths ?? []).allSatisfy({ FileManager.default.fileExists(atPath: $0) }) {
-            statusMessage = "Eine oder mehrere Originaldateien fehlen."
+            showStatus("Eine oder mehrere Originaldateien fehlen.")
             return
         }
         pasteboard.clearContents()
@@ -205,7 +247,7 @@ final class AppModel: ObservableObject {
             let paths = payload.filePaths ?? []
             success = pasteboard.writeObjects(paths.map { NSURL(fileURLWithPath: $0) })
         }
-        guard success else { statusMessage = "Kopieren fehlgeschlagen."; return }
+        guard success else { showStatus("Kopieren fehlgeschlagen."); return }
         if item.isSensitive {
             let concealed = NSPasteboard.PasteboardType("org.nspasteboard.ConcealedType")
             pasteboard.addTypes([concealed], owner: nil)
@@ -219,16 +261,17 @@ final class AppModel: ObservableObject {
             refresh()
         } catch {
             updatedHistory = false
-            statusMessage = "Kopiert, aber Verlauf konnte nicht aktualisiert werden: \(error.localizedDescription)"
+            showStatus("Kopiert, aber Verlauf konnte nicht aktualisiert werden: \(error.localizedDescription)")
         }
         onClosePanel?()
-        if updatedHistory { statusMessage = "In die Zwischenablage kopiert." }
+        if updatedHistory { showStatus("In die Zwischenablage kopiert.") }
         if autoPaste && systemIntegrationsEnabled { pasteIntoPreviousApp() }
     }
 
     private func pasteIntoPreviousApp() {
         guard AXIsProcessTrusted(), let previousApp else {
-            statusMessage = "Für automatisches Einfügen fehlt die Bedienungshilfen-Freigabe. Inhalt wurde kopiert."
+            showStatus("Für automatisches Einfügen fehlt die Bedienungshilfen-Freigabe. Inhalt wurde kopiert.",
+                       recovery: .openAccessibilitySettings)
             return
         }
         previousApp.activate()
@@ -246,19 +289,38 @@ final class AppModel: ObservableObject {
         guard item.kind == .url, let text = payload(for: item.id)?.text,
               let url = URL(string: text), ["http", "https"].contains(url.scheme?.lowercased() ?? "") else { return }
         if systemIntegrationsEnabled { NSWorkspace.shared.open(url) }
-        else { statusMessage = "Testmodus: URL geprüft, Browser nicht geöffnet." }
+        else { showStatus("Testmodus: URL geprüft, Browser nicht geöffnet.") }
     }
 
-    func pin(_ item: ClipSummary) { mutate { try $0.setPinned(!item.isPinned, for: item.id) } }
+    func pin(_ item: ClipSummary) {
+        mutate {
+            try $0.setPinned(!item.isPinned, for: item.id)
+            if item.isPinned { try $0.setFavoriteName(nil, for: item.id) }
+        }
+    }
+    func nameFavorite(_ item: ClipSummary, _ name: String) {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard mutate({
+            try $0.setFavoriteName(trimmed.isEmpty ? nil : trimmed, for: item.id)
+            if !trimmed.isEmpty { try $0.setPinned(true, for: item.id) }
+        }) else { return }
+        showStatus(trimmed.isEmpty ? "Favoritenname entfernt." : "Favorit benannt und angeheftet.")
+    }
+    func excludeSourceApp(of item: ClipSummary) {
+        guard let bundle = item.sourceBundleID else { return }
+        setExcluded(bundle, excluded: true)
+        showStatus("\(item.sourceName ?? bundle) wird künftig nicht mehr erfasst.")
+    }
     func markSensitive(_ item: ClipSummary, _ sensitive: Bool) {
         mutate { try $0.setSensitive(sensitive, for: item.id) }
         try? purge()
     }
     func delete(_ item: ClipSummary) { mutate { try $0.delete(item.id) } }
-    private func mutate(_ action: (ClipDatabase) throws -> Void) {
-        guard let database else { return }
-        do { try action(database); refresh() }
-        catch { statusMessage = error.localizedDescription }
+    @discardableResult
+    private func mutate(_ action: (ClipDatabase) throws -> Void) -> Bool {
+        guard let database else { return false }
+        do { try action(database); refresh(); return true }
+        catch { showStatus(error.localizedDescription); return false }
     }
 
     func setShortcut(_ value: Shortcut?) {
@@ -266,9 +328,9 @@ final class AppModel: ObservableObject {
         if result {
             shortcut = value
             defaults.set(try? JSONEncoder().encode(value), forKey: "shortcut")
-            statusMessage = value == nil ? "Tastenkürzel deaktiviert." : "Tastenkürzel gespeichert."
+            showStatus(value == nil ? "Tastenkürzel deaktiviert." : "Tastenkürzel gespeichert.")
         } else {
-            statusMessage = "Tastenkürzel ist bereits belegt. Bitte ein anderes wählen."
+            showStatus("Tastenkürzel ist bereits belegt. Bitte ein anderes wählen.", recovery: .openSmartClipSettings)
         }
     }
     var onOpenHistory: (() -> Void)?
@@ -279,9 +341,36 @@ final class AppModel: ObservableObject {
         lastChangeCount = pasteboard.changeCount
     }
     func setPaused(_ value: Bool) {
-        isPaused = value
+        pauseTimer?.invalidate()
+        pauseTimer = nil
+        pauseMode = value ? .manual : .active
         defaults.set(value, forKey: "paused")
         if !value { lastChangeCount = pasteboard.changeCount }
+    }
+    func pause(for seconds: TimeInterval) {
+        let end = now().addingTimeInterval(seconds)
+        defaults.set(false, forKey: "paused")
+        pauseMode = .until(end)
+        schedulePauseTimer(seconds: seconds)
+        showStatus("Aufzeichnung bis \(end.formatted(date: .omitted, time: .shortened)) pausiert.")
+    }
+    func pauseUntilRestart() {
+        pauseTimer?.invalidate()
+        pauseTimer = nil
+        defaults.set(false, forKey: "paused")
+        pauseMode = .untilRestart
+        showStatus("Aufzeichnung bis zum nächsten Start pausiert.")
+    }
+    func updateTimedPause(at date: Date? = nil) {
+        guard case .until(let end) = pauseMode, (date ?? now()) >= end else { return }
+        setPaused(false)
+        showStatus("Aufzeichnung automatisch fortgesetzt.")
+    }
+    private func schedulePauseTimer(seconds: TimeInterval) {
+        pauseTimer?.invalidate()
+        pauseTimer = Timer.scheduledTimer(withTimeInterval: max(0.1, seconds), repeats: false) { [weak self] _ in
+            Task { @MainActor in self?.updateTimedPause(at: .distantFuture) }
+        }
     }
     func setCardView(_ value: Bool) { cardView = value; defaults.set(value, forKey: "cardView") }
     func setNormalDays(_ value: Int) {
@@ -306,12 +395,40 @@ final class AppModel: ObservableObject {
         defaults.set(Array(excludedBundles).sorted(), forKey: "excludedBundles")
     }
     func setAutoStart(_ enabled: Bool) {
-        guard systemIntegrationsEnabled else { statusMessage = "Autostart im Testmodus deaktiviert."; return }
+        guard systemIntegrationsEnabled else { showStatus("Autostart im Testmodus deaktiviert."); return }
         do {
             if enabled { try SMAppService.mainApp.register() }
             else { try SMAppService.mainApp.unregister() }
-            statusMessage = enabled ? "Autostart aktiviert." : "Autostart deaktiviert."
-        } catch { statusMessage = "Autostart: \(error.localizedDescription)" }
+            showStatus(enabled ? "Autostart aktiviert." : "Autostart deaktiviert.")
+        } catch { showStatus("Autostart: \(error.localizedDescription)") }
     }
     var autoStartEnabled: Bool { SMAppService.mainApp.status == .enabled }
+
+    func showStatus(_ message: String, recovery: RecoveryAction? = nil) {
+        statusMessage = message
+        recoveryAction = recovery
+    }
+
+    func performRecovery() {
+        guard let action = recoveryAction else { return }
+        switch action {
+        case .retryStorage:
+            Task { await start() }
+        case .openClipboardSettings:
+            openSystemSettings("Privacy_Pasteboard")
+        case .openAccessibilitySettings:
+            openSystemSettings("Privacy_Accessibility")
+        case .openSmartClipSettings:
+            onOpenSettings?()
+        }
+    }
+
+    private func openSystemSettings(_ pane: String) {
+        guard systemIntegrationsEnabled,
+              let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?\(pane)") else {
+            showStatus("Systemeinstellungen sind im Testmodus deaktiviert.")
+            return
+        }
+        NSWorkspace.shared.open(url)
+    }
 }

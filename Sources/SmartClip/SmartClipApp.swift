@@ -1,10 +1,17 @@
 import AppKit
+import Combine
 import SwiftUI
 
 @main
-struct SmartClipApp: App {
-    @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
-    var body: some Scene { Settings { SettingsView(model: delegate.model) } }
+@MainActor
+enum SmartClipApp {
+    private static let delegate = AppDelegate()
+
+    static func main() {
+        let app = NSApplication.shared
+        app.delegate = delegate
+        app.run()
+    }
 }
 
 @MainActor
@@ -29,6 +36,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         super.init()
     }
 
+    init(model: AppModel) {
+        self.model = model
+        super.init()
+    }
+
     func applicationWillTerminate(_ notification: Notification) {
         #if DEBUG
         testSession?.cleanup()
@@ -37,6 +49,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem?
     private var panel: HistoryPanel?
     private var settingsWindow: NSWindow?
+    private var pauseObservation: AnyCancellable?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         #if DEBUG
@@ -67,15 +80,53 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         item.button?.image = NSImage(systemSymbolName: "paperclip.circle", accessibilityDescription: "SmartClip")
         item.button?.target = self
-        item.button?.action = #selector(toggleHistoryFromMenuBar)
+        item.button?.action = #selector(handleStatusItemClick)
+        item.button?.sendAction(on: [.leftMouseUp, .rightMouseUp])
         statusItem = item
+        pauseObservation = model.$pauseMode.sink { [weak self] _ in self?.updateStatusItemAppearance() }
         if !model.onboardingComplete { showSettings() }
         #if DEBUG
         if testSession != nil { toggleHistory() }
         #endif
     }
 
-    @objc private func toggleHistoryFromMenuBar() { toggleHistory() }
+    @objc private func handleStatusItemClick() {
+        if NSApp.currentEvent?.type == .rightMouseUp { showStatusMenu() }
+        else { toggleHistory() }
+    }
+
+    private func showStatusMenu() {
+        guard let button = statusItem?.button else { return }
+        let menu = makeStatusMenu()
+        menu.popUp(positioning: nil, at: NSPoint(x: 0, y: button.bounds.height + 2), in: button)
+    }
+
+    func makeStatusMenu() -> NSMenu {
+        let menu = NSMenu()
+        if model.isPaused {
+            menu.addItem(withTitle: "Aufzeichnung fortsetzen", action: #selector(resumeCapture), keyEquivalent: "")
+            menu.addItem(.separator())
+        }
+        menu.addItem(withTitle: "15 Minuten pausieren", action: #selector(pauseFor15Minutes), keyEquivalent: "")
+        menu.addItem(withTitle: "Bis zum Neustart pausieren", action: #selector(pauseUntilNextLaunch), keyEquivalent: "")
+        menu.addItem(.separator())
+        menu.addItem(withTitle: "Einstellungen …", action: #selector(openSettingsFromMenu), keyEquivalent: ",")
+        menu.addItem(withTitle: "SmartClip beenden", action: #selector(quitFromMenu), keyEquivalent: "q")
+        for item in menu.items { item.target = self }
+        return menu
+    }
+
+    private func updateStatusItemAppearance() {
+        let symbol = model.isPaused ? "pause.circle" : "paperclip.circle"
+        statusItem?.button?.image = NSImage(systemSymbolName: symbol, accessibilityDescription: model.captureStatusLabel)
+        statusItem?.button?.toolTip = "SmartClip · \(model.captureStatusLabel)"
+    }
+
+    @objc private func resumeCapture() { model.setPaused(false) }
+    @objc private func pauseFor15Minutes() { model.pause(for: 15 * 60) }
+    @objc private func pauseUntilNextLaunch() { model.pauseUntilRestart() }
+    @objc private func openSettingsFromMenu() { showSettings() }
+    @objc private func quitFromMenu() { NSApp.terminate(nil) }
 
     private func toggleHistory() {
         if let panel, panel.isVisible && !panel.isMiniaturized { panel.orderOut(nil); return }

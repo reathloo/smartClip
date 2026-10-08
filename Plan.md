@@ -9,9 +9,11 @@ Die konkrete Testabdeckung und verbleibende Grenzen stehen in [docs/TESTBERICHT.
 - Globales frei wählbares Kürzel; ⌘⇧V nur nach aktiver Auswahl.
 - Kompakte Liste und Karten, System-Hell-/Dunkelmodus, Suche und Typfilter.
 - Favoriten oben, Kopieren und Löschen, HTTP(S)-URLs öffnen.
+- Favoriten können einen verschlüsselt gespeicherten Namen erhalten und darüber gesucht werden.
 - Ergänzung: Codefilter mit lokaler heuristischer Spracherkennung, Sprachkennzeichnung, Sprachsuche und formatgetreuem Kopieren.
 - Standard: nur kopieren. Optional in vorherige App einfügen, abhängig von Bedienungshilfen-Freigabe.
 - Autostart über SMAppService, pausierbare Aufzeichnung, ausgeschlossene Apps.
+- Komfort: 15 Minuten, bis zum Neustart oder unbegrenzt pausieren; Quell-App direkt am Eintrag ausschließen; Statusmeldungen bieten passende Aktionen.
 - Ergänzung aus dem Feedback: verschiebbares/veränderbares Fenster mit Schließen/Minimieren, Escape und ⌘W; Kürzel blendet ein/aus und stellt minimiertes Fenster wieder her.
 - Ergänzung aus dem Feedback: Enter während einer Suche bestätigt nur die Suche. Nach Auswahl mit einer Pfeiltaste übernimmt Enter den Treffer; Klick auf einen Treffer übernimmt ihn ebenfalls.
 

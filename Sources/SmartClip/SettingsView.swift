@@ -47,9 +47,16 @@ struct SettingsView: View {
                     case .privacy: privacySettings
                     }
                     if !model.statusMessage.isEmpty {
-                        Label(model.statusMessage, systemImage: "info.circle")
-                            .font(.system(size: 11)).foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
+                        HStack(alignment: .top, spacing: 8) {
+                            Label(model.statusMessage, systemImage: "info.circle")
+                                .font(.system(size: 11)).foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                            Spacer()
+                            if let recovery = model.recoveryAction {
+                                Button(recovery.title) { model.performRecovery() }
+                                    .buttonStyle(.link).font(.system(size: 11)).fixedSize()
+                            }
+                        }
                     }
                 }
                 .padding(28)
@@ -136,8 +143,14 @@ struct SettingsView: View {
             }
             if model.onboardingComplete {
                 SettingsCard("Aufzeichnung", symbol: "record.circle") {
-                    settingToggle("Aufzeichnung pausieren", detail: "Neue Kopien werden vorübergehend nicht gespeichert.",
+                    settingToggle("Aufzeichnung pausieren", detail: model.captureStatusLabel,
                                   value: Binding(get: { model.isPaused }, set: { model.setPaused($0) }))
+                    HStack(spacing: 14) {
+                        Button("15 Minuten") { model.pause(for: 15 * 60) }
+                        Button("Bis zum Neustart") { model.pauseUntilRestart() }
+                        if model.isPaused { Button("Fortsetzen") { model.setPaused(false) } }
+                    }
+                    .buttonStyle(.link).font(.system(size: 11))
                 }
             }
         }

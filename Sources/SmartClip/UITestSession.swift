@@ -20,15 +20,15 @@ final class UITestSession {
         let db = try ClipDatabase(path: directory.appendingPathComponent("history.sqlite").path,
                                   crypto: CryptoStore(key: SymmetricKey(size: .bits256)))
         model = AppModel(defaults: defaults, pasteboard: pasteboard, database: db, systemIntegrationsEnabled: false)
-        let samples: [(String, Bool, String)] = [
-            ("https://example.org", false, "Safari"),
-            ("SmartClip Testnotiz", false, "Notizen"),
-            ("def greet(name):\n    return name", false, "Visual Studio Code"),
-            ("hallo@example.org", false, "Mail"),
-            ("synthetic-secret-42", true, "Test-Passwortmanager")
+        let samples: [(String, Bool, String, String)] = [
+            ("https://example.org", false, "Safari", "com.apple.Safari"),
+            ("SmartClip Testnotiz", false, "Notizen", "com.apple.Notes"),
+            ("def greet(name):\n    return name", false, "Visual Studio Code", "com.microsoft.VSCode"),
+            ("hallo@example.org", false, "Mail", "com.apple.mail"),
+            ("synthetic-secret-42", true, "Test-Passwortmanager", "dev.smartclip.test-vault")
         ]
         for (index, sample) in samples.enumerated() {
-            try db.capture(.text(sample.0), sourceName: sample.2, sourceBundleID: nil,
+            try db.capture(.text(sample.0), sourceName: sample.2, sourceBundleID: sample.3,
                            sensitive: sample.1, at: .now.addingTimeInterval(-Double(index * 10)))
         }
         let first = try db.list()[0]
@@ -37,7 +37,7 @@ final class UITestSession {
                        sourceName: "Finder", sourceBundleID: nil, sensitive: false)
         model.setMonitoring(true)
         model.refresh()
-        model.statusMessage = "Testmodus: Beispieldaten und separate Zwischenablage."
+        model.showStatus("Testmodus: Beispieldaten und separate Zwischenablage.")
     }
 
     func cleanup() {

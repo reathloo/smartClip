@@ -40,9 +40,13 @@ final class ClipDatabase {
                 sensitive INTEGER NOT NULL,
                 pinned INTEGER NOT NULL DEFAULT 0,
                 copy_count INTEGER NOT NULL DEFAULT 1,
+                favorite_name BLOB,
                 payload BLOB NOT NULL
             )
             """)
+        if try !hasColumn("favorite_name", in: "clips") {
+            try execute("ALTER TABLE clips ADD COLUMN favorite_name BLOB")
+        }
         try execute("CREATE INDEX IF NOT EXISTS clips_order ON clips(pinned DESC, last_copied DESC)")
     }
 
@@ -60,6 +64,24 @@ final class ClipDatabase {
             throw DatabaseError.sqlite(message())
         }
         return stmt
+    }
+
+    private func hasColumn(_ column: String, in table: String) throws -> Bool {
+        let stmt = try prepare("PRAGMA table_info(\(table))")
+        defer { sqlite3_finalize(stmt) }
+        while try nextRow(stmt) {
+            if columnString(stmt, 1) == column { return true }
+        }
+        return false
+    }
+
+    /// Distinguish end-of-results from SQLite failures instead of returning partial data.
+    private func nextRow(_ stmt: OpaquePointer) throws -> Bool {
+        switch sqlite3_step(stmt) {
+        case SQLITE_ROW: return true
+        case SQLITE_DONE: return false
+        default: throw DatabaseError.sqlite(message())
+        }
     }
 
     private func bind(_ string: String?, to index: Int32, in stmt: OpaquePointer) {
@@ -113,20 +135,29 @@ final class ClipDatabase {
     }
 
     func list(search: String = "", kind: ClipKind? = nil, limit: Int = 200) throws -> [ClipSummary] {
+        guard limit > 0 else { return [] }
         let stmt = try prepare("""
-            SELECT id, kind, last_copied, source_name, source_bundle, sensitive, pinned, copy_count, payload
+            SELECT id, kind, last_copied, source_name, source_bundle, sensitive, pinned, copy_count, payload, favorite_name
             FROM clips ORDER BY pinned DESC, last_copied DESC
             """)
         defer { sqlite3_finalize(stmt) }
         let needle = search.trimmingCharacters(in: .whitespacesAndNewlines)
         var results: [ClipSummary] = []
-        while sqlite3_step(stmt) == SQLITE_ROW, results.count < limit {
+        while results.count < limit, try nextRow(stmt) {
             guard let idString = columnString(stmt, 0), let id = UUID(uuidString: idString),
                   let kindString = columnString(stmt, 1), let rowKind = ClipKind(rawValue: kindString) else { continue }
+            // Old text rows can become code on read; other types cannot change.
+            if let kind, rowKind != kind, !(rowKind == .text && kind == .code) { continue }
             var displayKind = rowKind
             var codeLanguage: String?
             let sourceName = columnString(stmt, 3)
             let sensitive = sqlite3_column_int(stmt, 5) != 0
+            let favoriteName: String?
+            if let sealedName = columnData(stmt, 9) {
+                favoriteName = String(data: try crypto.open(sealedName), encoding: .utf8)
+            } else {
+                favoriteName = nil
+            }
             var preview = sensitive ? "••••••••" : rowKind == .image ? "Bild" : ""
             var missing = false
             let sourceMatches = sourceName?.localizedCaseInsensitiveContains(needle) == true
@@ -141,7 +172,8 @@ final class ClipDatabase {
                 missing = payload.hasMissingFiles
             }
             if let kind, kind != displayKind { continue }
-            if !needle.isEmpty && !sourceMatches && !preview.localizedCaseInsensitiveContains(needle)
+            if !needle.isEmpty && !sourceMatches && favoriteName?.localizedCaseInsensitiveContains(needle) != true
+                && !preview.localizedCaseInsensitiveContains(needle)
                 && codeLanguage?.localizedCaseInsensitiveContains(needle) != true { continue }
             results.append(ClipSummary(
                 id: id, kind: displayKind,
@@ -149,7 +181,7 @@ final class ClipDatabase {
                 sourceName: sourceName, sourceBundleID: columnString(stmt, 4),
                 isSensitive: sensitive, isPinned: sqlite3_column_int(stmt, 6) != 0,
                 copyCount: Int(sqlite3_column_int(stmt, 7)), preview: preview,
-                hasMissingFiles: missing, codeLanguage: codeLanguage
+                hasMissingFiles: missing, codeLanguage: codeLanguage, favoriteName: favoriteName
             ))
         }
         return results
@@ -159,12 +191,22 @@ final class ClipDatabase {
         let stmt = try prepare("SELECT payload FROM clips WHERE id=?")
         defer { sqlite3_finalize(stmt) }
         bind(id.uuidString, to: 1, in: stmt)
-        guard sqlite3_step(stmt) == SQLITE_ROW, let sealed = columnData(stmt, 0) else { return nil }
+        guard try nextRow(stmt) else { return nil }
+        guard let sealed = columnData(stmt, 0) else { throw DatabaseError.invalidRecord }
         return try PropertyListDecoder().decode(ClipPayload.self, from: crypto.open(sealed))
     }
 
     func setPinned(_ pinned: Bool, for id: UUID) throws { try setFlag("pinned", value: pinned, id: id) }
     func setSensitive(_ sensitive: Bool, for id: UUID) throws { try setFlag("sensitive", value: sensitive, id: id) }
+
+    func setFavoriteName(_ name: String?, for id: UUID) throws {
+        let stmt = try prepare("UPDATE clips SET favorite_name=? WHERE id=?")
+        defer { sqlite3_finalize(stmt) }
+        if let name { bind(try crypto.seal(Data(name.utf8)), to: 1, in: stmt) }
+        else { sqlite3_bind_null(stmt, 1) }
+        bind(id.uuidString, to: 2, in: stmt)
+        guard sqlite3_step(stmt) == SQLITE_DONE else { throw DatabaseError.sqlite(message()) }
+    }
 
     private func setFlag(_ column: String, value: Bool, id: UUID) throws {
         let stmt = try prepare("UPDATE clips SET \(column)=? WHERE id=?")
@@ -182,27 +224,31 @@ final class ClipDatabase {
     }
 
     func purge(normalDays: Int?, sensitiveSeconds: TimeInterval, now: Date = .now) throws -> Int {
-        let stmt = try prepare("SELECT id, last_copied, sensitive, pinned FROM clips")
-        var ids: [UUID] = []
-        while sqlite3_step(stmt) == SQLITE_ROW {
-            guard let raw = columnString(stmt, 0), let id = UUID(uuidString: raw) else { continue }
-            if Retention.expired(
-                lastCopiedAt: Date(timeIntervalSince1970: sqlite3_column_double(stmt, 1)),
-                sensitive: sqlite3_column_int(stmt, 2) != 0,
-                pinned: sqlite3_column_int(stmt, 3) != 0,
-                normalDays: normalDays, sensitiveSeconds: sensitiveSeconds, now: now
-            ) { ids.append(id) }
+        // One atomic statement avoids a full Swift-side scan and a transaction per row.
+        let stmt = try prepare("""
+            DELETE FROM clips
+            WHERE (sensitive != 0 AND last_copied <= ?)
+               OR (sensitive = 0 AND pinned = 0 AND ? IS NOT NULL AND last_copied <= ?)
+            """)
+        defer { sqlite3_finalize(stmt) }
+        sqlite3_bind_double(stmt, 1, now.timeIntervalSince1970 - sensitiveSeconds)
+        if let normalDays {
+            let cutoff = now.timeIntervalSince1970 - Double(normalDays) * 86_400
+            sqlite3_bind_double(stmt, 2, cutoff)
+            sqlite3_bind_double(stmt, 3, cutoff)
+        } else {
+            sqlite3_bind_null(stmt, 2)
+            sqlite3_bind_null(stmt, 3)
         }
-        sqlite3_finalize(stmt)
-        for id in ids { try delete(id) }
-        return ids.count
+        guard sqlite3_step(stmt) == SQLITE_DONE else { throw DatabaseError.sqlite(message()) }
+        return Int(sqlite3_changes(db))
     }
 
     func knownApps() throws -> [(String, String)] {
         let stmt = try prepare("SELECT source_bundle, COALESCE(MAX(source_name), source_bundle) FROM clips WHERE source_bundle IS NOT NULL GROUP BY source_bundle ORDER BY 2")
         defer { sqlite3_finalize(stmt) }
         var apps: [(String, String)] = []
-        while sqlite3_step(stmt) == SQLITE_ROW {
+        while try nextRow(stmt) {
             if let bundle = columnString(stmt, 0), let name = columnString(stmt, 1) { apps.append((bundle, name)) }
         }
         return apps

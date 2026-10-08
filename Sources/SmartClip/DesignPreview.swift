@@ -18,9 +18,17 @@ func renderDesignPreviews() async throws {
         (.text, "••••••••", "Safari", "com.apple.Safari", false, true)
     ]
     model.items = samples.enumerated().map { index, item in
-        ClipSummary(id: UUID(), kind: item.0, lastCopiedAt: .now.addingTimeInterval(-Double(120 + index * 90)),
+        ClipSummary(id: UUID(), kind: item.0, lastCopiedAt: .now.addingTimeInterval(index == 2 ? -172_800 : -Double(120 + index * 90)),
                     sourceName: item.2, sourceBundleID: item.3, isSensitive: item.5,
                     isPinned: item.4, copyCount: index == 0 ? 3 : 1, preview: item.1, hasMissingFiles: false, codeLanguage: item.0 == .code ? "Python" : nil)
+    }
+    if !model.items.isEmpty {
+        let first = model.items[0]
+        model.items[0] = ClipSummary(id: first.id, kind: first.kind, lastCopiedAt: first.lastCopiedAt,
+                                     sourceName: first.sourceName, sourceBundleID: first.sourceBundleID,
+                                     isSensitive: first.isSensitive, isPinned: true, copyCount: first.copyCount,
+                                     preview: first.preview, hasMissingFiles: first.hasMissingFiles,
+                                     codeLanguage: first.codeLanguage, favoriteName: "Apple Design")
     }
     for dark in [false, true] {
         let scheme: ColorScheme = dark ? .dark : .light
@@ -51,6 +59,13 @@ func renderDesignPreviews() async throws {
     model.items = []
     try await snapshot(HistoryView(model: model), size: NSSize(width: 600, height: 680),
                        scheme: .light, to: output.appendingPathComponent("empty-light.png"))
+    model.search = "kein Treffer"
+    try await snapshot(HistoryView(model: model), size: NSSize(width: 560, height: 540),
+                       scheme: .light, to: output.appendingPathComponent("search-empty-compact.png"))
+    model.search = ""
+    model.pauseUntilRestart()
+    try await snapshot(HistoryView(model: model), size: NSSize(width: 560, height: 540),
+                       scheme: .dark, to: output.appendingPathComponent("paused-dark-compact.png"))
     print("Design previews: \(output.path)")
 }
 

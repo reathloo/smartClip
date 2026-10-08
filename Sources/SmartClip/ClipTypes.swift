@@ -107,6 +107,7 @@ struct ClipSummary: Identifiable {
     let preview: String
     let hasMissingFiles: Bool
     var codeLanguage: String? = nil
+    var favoriteName: String? = nil
 }
 
 enum ClipClassifier {

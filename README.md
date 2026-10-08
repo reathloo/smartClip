@@ -7,9 +7,10 @@ Ein lokaler, verschlüsselter Zwischenablage-Verlauf für **macOS 14+** – dire
 ## Funktionen
 
 - Text, Links, E-Mails, Bilder, Dateireferenzen und Code mit Spracherkennung.
-- Suche, Typfilter, Favoriten sowie Listen- und Kartenansicht.
+- Suche, Typfilter, benannte Favoriten sowie Listen- und Kartenansicht.
 - Globales Tastenkürzel, optionaler Autostart und direktes Einfügen.
-- Einstellbare Löschfristen, maskierte sensible Inhalte und App-Ausschlüsse.
+- Zeitgesteuerte Pausen, direkte App-Ausschlüsse und hilfreiche Wiederherstellungsaktionen.
+- Einstellbare Löschfristen und maskierte sensible Inhalte.
 
 ## Starten
 
@@ -28,7 +29,7 @@ Beim ersten Start die Aufzeichnung aktivieren und ein Kürzel wählen, beispiels
 zsh scripts/test.sh
 ```
 
-96 automatisierte Prüffälle mit isolierten Testdaten. Details und offene Systemtests: [Testbericht](docs/TESTBERICHT.md) · [Projektplan](Plan.md).
+110 automatisierte Prüffälle mit isolierten Testdaten. Details und offene Systemtests: [Testbericht](docs/TESTBERICHT.md) · [Projektplan](Plan.md).
 
 ## Hinweise
 

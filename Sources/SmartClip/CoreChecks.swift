@@ -32,7 +32,8 @@ private final class Fixture {
         defaults = UserDefaults(suiteName: suite)!
         db = try ClipDatabase(path: directory.appendingPathComponent("history.sqlite").path, crypto: crypto)
         let time = time
-        model = AppModel(defaults: defaults, pasteboard: pasteboard, database: db, now: { time })
+        model = AppModel(defaults: defaults, pasteboard: pasteboard, database: db, now: { time },
+                         systemIntegrationsEnabled: false)
     }
     func cleanup() {
         defaults.removePersistentDomain(forName: suite)
@@ -256,6 +257,53 @@ func runCoreChecks() async throws {
         try f.db.setSensitive(false, for: f.row().id)
         try expect(try !f.row().isSensitive, "Explicit manual reclassification failed")
     }
+    integration("database.encrypted-named-favorite-search-and-dedup") { f in
+        let secretName = "Mein geheimer Textbaustein"
+        try f.capture(.text("wiederverwendbarer Inhalt"))
+        let id = try f.row().id
+        try f.db.setFavoriteName(secretName, for: id)
+        try f.db.setPinned(true, for: id)
+        try f.capture(.text("wiederverwendbarer Inhalt"), at: f.time.addingTimeInterval(10))
+        let favorite = try f.db.list(search: "Textbaustein").first
+        try expect(favorite?.id == id && favorite?.favoriteName == secretName && favorite?.isPinned == true,
+                   "Named favorite was not searchable or survived deduplication")
+        for name in ["history.sqlite", "history.sqlite-wal"] {
+            let data = try Data(contentsOf: f.directory.appendingPathComponent(name))
+            try expect(data.range(of: Data(secretName.utf8)) == nil, "Favorite name stored as plaintext")
+        }
+        try f.db.setFavoriteName(nil, for: id)
+        try expect(try f.row().favoriteName == nil, "Favorite name was not removed")
+    }
+    test("database.favorite-name-migrates-existing-history") {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("SmartClipMigration-\(UUID())")
+        let path = directory.appendingPathComponent("history.sqlite").path
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        var handle: OpaquePointer?
+        try expect(sqlite3_open(path, &handle) == SQLITE_OK, "Cannot create legacy database")
+        let legacySchema = """
+            CREATE TABLE clips (
+                id TEXT PRIMARY KEY, digest BLOB NOT NULL UNIQUE, kind TEXT NOT NULL,
+                created REAL NOT NULL, last_copied REAL NOT NULL, source_name TEXT,
+                source_bundle TEXT, sensitive INTEGER NOT NULL, pinned INTEGER NOT NULL DEFAULT 0,
+                copy_count INTEGER NOT NULL DEFAULT 1, payload BLOB NOT NULL
+            )
+            """
+        try expect(sqlite3_exec(handle, legacySchema, nil, nil, nil) == SQLITE_OK, "Cannot create legacy schema")
+        sqlite3_close(handle)
+        _ = try ClipDatabase(path: path, crypto: CryptoStore(key: SymmetricKey(size: .bits256)))
+        try expect(sqlite3_open(path, &handle) == SQLITE_OK, "Cannot reopen migrated database")
+        defer { sqlite3_close(handle) }
+        var statement: OpaquePointer?
+        try expect(sqlite3_prepare_v2(handle, "PRAGMA table_info(clips)", -1, &statement, nil) == SQLITE_OK,
+                   "Cannot inspect migrated schema")
+        defer { sqlite3_finalize(statement) }
+        var found = false
+        while sqlite3_step(statement) == SQLITE_ROW {
+            if String(cString: sqlite3_column_text(statement, 1)) == "favorite_name" { found = true }
+        }
+        try expect(found, "Existing database did not receive favorite_name column")
+    }
     integration("database.search-filter-limit-and-mask") { f in
         try f.capture(.text("Café HELLO"))
         try f.capture(.text("https://example.org"), source: "Browser")
@@ -310,6 +358,19 @@ func runCoreChecks() async throws {
         try f.write("after resume"); f.poll()
         try expect(try f.db.list().count == 2, "Resume failed")
     }
+    integration("model.temporary-and-restart-pause") { f in
+        f.model.pause(for: 15 * 60)
+        try expect(f.model.isPaused && f.model.captureStatusLabel.contains("bis"), "Timed pause not visible")
+        try expect(f.defaults.bool(forKey: "paused") == false, "Timed pause persisted as manual pause")
+        f.model.updateTimedPause(at: f.time.addingTimeInterval(899))
+        try expect(f.model.isPaused, "Timed pause ended early")
+        f.model.updateTimedPause(at: f.time.addingTimeInterval(900))
+        try expect(!f.model.isPaused, "Timed pause did not end")
+        f.model.pauseUntilRestart()
+        try expect(f.model.isPaused && f.model.captureStatusLabel.contains("Neustart"), "Restart pause not visible")
+        let relaunched = AppModel(defaults: f.defaults, pasteboard: f.pasteboard)
+        try expect(!relaunched.isPaused, "Restart pause survived relaunch")
+    }
     integration("model.excluded-and-access-denied") { f in
         f.model.setMonitoring(true)
         f.model.setExcluded("test.excluded", excluded: true)
@@ -319,6 +380,17 @@ func runCoreChecks() async throws {
         try expect(try f.db.list().isEmpty && f.model.statusMessage.contains("gesperrt"), "Denial not respected/explained")
         try f.write("allowed"); f.poll()
         try expect(try f.db.list().count == 1, "Allowed copy not captured")
+    }
+    integration("model.exclude-source-from-entry-and-recovery-action") { f in
+        try f.capture(.text("source"), source: "Browser", bundle: "test.browser")
+        f.model.excludeSourceApp(of: try f.row())
+        try expect(f.model.excludedBundles.contains("test.browser") && f.model.statusMessage.contains("Browser"),
+                   "Source app was not excluded from entry")
+        f.model.setMonitoring(true)
+        try f.write("denied"); f.poll(denied: true)
+        try expect(f.model.recoveryAction == .openClipboardSettings, "Denied access has no recovery action")
+        f.model.performRecovery()
+        try expect(f.model.statusMessage.contains("Testmodus"), "Recovery action was not routed safely in tests")
     }
     integration("model.copy-original-secret-and-no-self-recapture") { f in
         f.model.setMonitoring(true)
@@ -373,6 +445,15 @@ func runCoreChecks() async throws {
         try expect(try f.row().preview == "action target", "Manual normal classification failed")
         f.model.delete(try f.row())
         try expect(f.model.items.isEmpty, "Delete not reflected")
+    }
+    integration("model.name-favorite-pins-and-unpin-clears-name") { f in
+        try f.capture(.text("snippet")); f.model.refresh()
+        f.model.nameFavorite(try f.row(), "Support-Antwort")
+        var row = try f.row()
+        try expect(row.isPinned && row.favoriteName == "Support-Antwort", "Naming did not pin favorite")
+        f.model.pin(row)
+        row = try f.row()
+        try expect(!row.isPinned && row.favoriteName == nil, "Unpinning kept an orphaned favorite name")
     }
     integration("database.corrupted-payload-rejected") { f in
         try f.capture(.text("authenticated record"))
@@ -444,7 +525,9 @@ func runCoreChecks() async throws {
         first.fire(); try expect(fired == 1, "Hotkey callback failed")
         try expect(!second.register(primary) {}, "Duplicate shortcut accepted")
         try expect(second.register(alternate) {}, "Alternate test chord unavailable")
-        try expect(!first.register(alternate) {}, "Conflicting replacement accepted")
+        try expect(!first.register(alternate) { fired += 100 }, "Conflicting replacement accepted")
+        first.fire()
+        try expect(fired == 2, "Failed replacement changed the active callback")
         try expect(!second.register(primary) {}, "Failed replacement released original shortcut")
         try expect(first.register(nil) {}, "Shortcut removal failed")
         try expect(second.register(primary) {}, "Removed shortcut was not released")
@@ -513,6 +596,112 @@ func runCoreChecks() async throws {
         f.model.copy(row)
         try expect(f.pasteboard.string(forType: .string) == "const password = 'synthetic';", "Sensitive code not copied")
     }
+    integration("database.bulk-expiry") { f in
+        for index in 0..<500 {
+            try f.capture(.text("expiry-\(index)"), at: f.time.addingTimeInterval(-31 * 86_400))
+        }
+        let start = Date()
+        let removed = try f.db.purge(normalDays: 30, sensitiveSeconds: 3_600, now: f.time)
+        print("METRIC expiry of 500 entries: \(Int(Date().timeIntervalSince(start) * 1000)) ms")
+        try expect(removed == 500 && f.db.list().isEmpty, "Bulk expiry failed")
+    }
+    test("navigation.search-enter-and-explicit-selection") {
+        let ids = [UUID(), UUID(), UUID()]
+        try expect(HistoryNavigation.selected(in: ids, explicit: nil, search: "query") == nil, "Search Enter selects a result implicitly")
+        let selected = HistoryNavigation.moved(in: ids, explicit: nil, search: "query", offset: 1)
+        try expect(selected == ids[0], "First arrow skips first search result")
+        try expect(HistoryNavigation.selected(in: ids, explicit: selected, search: "query") == ids[0], "Explicit selection lost")
+        try expect(HistoryNavigation.selected(in: ids, explicit: nil, search: "  ") == ids[0], "Default selection changed")
+    }
+    test("navigation.bounds-empty-and-removed-selection") {
+        let ids = [UUID(), UUID()]
+        try expect(HistoryNavigation.moved(in: [], explicit: nil, search: "", offset: 1) == nil, "Empty list selected")
+        try expect(HistoryNavigation.moved(in: ids, explicit: ids[0], search: "", offset: -1) == ids[0], "Moved before start")
+        try expect(HistoryNavigation.moved(in: ids, explicit: ids[1], search: "", offset: 1) == ids[1], "Moved beyond end")
+        try expect(HistoryNavigation.selected(in: ids, explicit: UUID(), search: "") == nil, "Removed row reused")
+        try expect(HistoryNavigation.moved(in: ids, explicit: nil, search: "query", offset: -1) == ids[1], "Up did not select last search result")
+    }
+    integration("model.current-item-index-updates-and-removes") { f in
+        try f.capture(.text("indexed")); f.model.refresh()
+        let original = try f.row()
+        try expect(f.model.item(for: original.id)?.isPinned == false, "Initial index missing")
+        f.model.pin(original)
+        try expect(f.model.item(for: original.id)?.isPinned == true, "Pin snapshot stale")
+        f.model.markSensitive(original, true)
+        try expect(f.model.item(for: original.id)?.preview == "••••••••", "Sensitive snapshot stale")
+        f.model.delete(original)
+        try expect(f.model.item(for: original.id) == nil, "Deleted row retained by index")
+    }
+    integration("model.search-flush-before-keyboard-selection") { f in
+        try f.capture(.text("first")); try f.capture(.text("second"))
+        f.model.refresh()
+        f.model.search = "second"; f.model.scheduleSearch()
+        f.model.applySearchImmediately()
+        let ids = f.model.items.map(\.id)
+        let selected = HistoryNavigation.moved(in: ids, explicit: nil, search: f.model.search, offset: 1)
+        try expect(selected != nil && f.model.item(for: selected!)?.preview == "second", "Keyboard used old search results")
+        f.model.filter = .url; f.model.applySearchImmediately()
+        try expect(f.model.items.isEmpty, "Filter not applied")
+        f.model.resetSearch()
+        try expect(f.model.search.isEmpty && f.model.filter == nil && f.model.items.count == 2, "Reset search/filter failed")
+    }
+    integration("model.capture-status-denied-and-recovery-without-new-copy") { f in
+        try expect(f.model.captureState == .setup, "Unconfigured status wrong")
+        f.model.setMonitoring(true)
+        try expect(f.model.captureState == .active, "Active status wrong")
+        f.poll(denied: true)
+        try expect(f.model.captureState == .denied, "Denied access advertised as active")
+        f.model.setPaused(true)
+        try expect(f.model.captureState == .paused, "Paused status wrong")
+        f.model.setPaused(false); f.poll(denied: false)
+        try expect(f.model.captureState == .active, "Access recovery not detected")
+        let unavailable = AppModel(defaults: f.defaults, pasteboard: f.pasteboard)
+        try expect(unavailable.captureState == .unavailable, "Unavailable storage advertised as active")
+    }
+    integration("database.expiry-sql-matches-retention-policy") { f in
+        for normalDays in [nil, 7, 30, 90, 365] as [Int?] {
+            for seconds in [300.0, 3_600, 86_400] {
+                var expected: Set<UUID> = []
+                var all: [UUID] = []
+                let ages: [TimeInterval] = [
+                    seconds - 1, seconds, seconds + 1,
+                    604_799, 604_800, 2_592_000, 7_776_000, 31_536_000, -1
+                ]
+                for sensitive in [false, true] {
+                    for pinned in [false, true] {
+                        for age in ages {
+                            let value = UUID().uuidString
+                            let date = f.time.addingTimeInterval(-age)
+                            try f.capture(.text(value), sensitive: sensitive, at: date)
+                            let row = try f.db.list(limit: 1000).first { $0.lastCopiedAt == date && !all.contains($0.id) }!
+                            all.append(row.id)
+                            try f.db.setPinned(pinned, for: row.id)
+                            if !Retention.expired(lastCopiedAt: date, sensitive: sensitive, pinned: pinned,
+                                                  normalDays: normalDays, sensitiveSeconds: seconds, now: f.time) {
+                                expected.insert(row.id)
+                            }
+                        }
+                    }
+                }
+                let removed = try f.db.purge(normalDays: normalDays, sensitiveSeconds: seconds, now: f.time)
+                try expect(removed == all.count - expected.count, "Expiry count differs from policy")
+                let survivors = try f.db.list(limit: 1000)
+                try expect(Set(survivors.map(\.id)) == expected, "SQL expiry differs from policy")
+                for row in survivors { try f.db.delete(row.id) }
+            }
+        }
+    }
+    integration("database.zero-limit-and-filter-skip-unrelated-payload") { f in
+        try f.capture(.text("corrupt text"))
+        var handle: OpaquePointer?
+        try expect(sqlite3_open(f.path, &handle) == SQLITE_OK, "Cannot open fixture")
+        defer { sqlite3_close(handle) }
+        try expect(sqlite3_exec(handle, "UPDATE clips SET payload=x'00'", nil, nil, nil) == SQLITE_OK, "Cannot corrupt fixture")
+        try f.capture(.text("https://example.org"))
+        try expect(try f.db.list(limit: 0).isEmpty, "Zero limit still decoded rows")
+        try expect(try f.db.list(kind: .url).count == 1, "URL filter decoded unrelated text")
+        try expectFailure { _ = try f.db.list() }
+    }
     test("window.native-controls-and-sizing") {
         let panel = HistoryPanel()
         defer { panel.close() }
@@ -521,6 +710,15 @@ func runCoreChecks() async throws {
         try expect(panel.standardWindowButton(.miniaturizeButton)?.isEnabled == true, "Minimize button missing")
         try expect(!panel.isReleasedWhenClosed && panel.canBecomeKey, "Window cannot be reused/focused")
         try expect(panel.contentMinSize == NSSize(width: 560, height: 540), "Minimum size not enforced")
+    }
+    integration("menu-bar.pause-actions") { f in
+        let delegate = AppDelegate(model: f.model)
+        var titles = delegate.makeStatusMenu().items.map(\.title)
+        try expect(titles.contains("15 Minuten pausieren") && titles.contains("Bis zum Neustart pausieren"),
+                   "Menu-bar pause actions missing")
+        f.model.pauseUntilRestart()
+        titles = delegate.makeStatusMenu().items.map(\.title)
+        try expect(titles.first == "Aufzeichnung fortsetzen", "Paused menu cannot resume capture")
     }
 
     func startupTest(_ name: String, _ body: (Fixture) async throws -> Void) async {

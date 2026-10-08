@@ -7,8 +7,8 @@ struct HistoryView: View {
     @State private var selectedID: UUID?
 
     private var selectedItem: ClipSummary? {
-        if let selectedID { return model.items.first { $0.id == selectedID } }
-        return model.search.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? model.items.first : nil
+        guard let id = HistoryNavigation.selected(in: model.items.map(\.id), explicit: selectedID, search: model.search) else { return nil }
+        return model.item(for: id)
     }
 
     var body: some View {
@@ -88,8 +88,8 @@ struct HistoryView: View {
                 .onKeyPress(.downArrow) { moveSelection(1); return .handled }
                 .onKeyPress(.upArrow) { moveSelection(-1); return .handled }
                 .onKeyPress(.return) {
+                    model.applySearchImmediately()
                     if let selectedItem { model.copy(selectedItem) }
-                    else { model.refresh() }
                     return .handled
                 }
             if !model.search.isEmpty {
@@ -108,20 +108,19 @@ struct HistoryView: View {
 
     private var filters: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-        HStack(spacing: 5) {
-            filterButton("Alle", symbol: "square.stack", kind: nil)
-            ForEach(ClipKind.allCases) { kind in
-                filterButton(kind.label, symbol: kind.symbol, kind: kind)
+            HStack(spacing: 5) {
+                filterButton("Alle", symbol: "square.stack", kind: nil)
+                ForEach(ClipKind.allCases) { kind in
+                    filterButton(kind.label, symbol: kind.symbol, kind: kind)
+                }
             }
-            Spacer(minLength: 0)
-        }
         }
     }
 
     private func filterButton(_ title: String, symbol: String, kind: ClipKind?) -> some View {
         let active = model.filter == kind
         return Button {
-            model.filter = kind; selectedID = nil; model.refresh()
+            model.filter = kind; selectedID = nil; model.applySearchImmediately()
         } label: {
             HStack(spacing: 5) {
                 Image(systemName: symbol).font(.system(size: 10, weight: .medium))
@@ -137,6 +136,7 @@ struct HistoryView: View {
 
     @ViewBuilder private func entrySection(_ title: String, pinned: Bool) -> some View {
         let items = model.items.filter { $0.isPinned == pinned }
+        let selectedID = selectedItem?.id
         if !items.isEmpty {
             HStack(spacing: 6) {
                 if pinned { Image(systemName: "pin.fill").font(.system(size: 10)) }
@@ -146,7 +146,7 @@ struct HistoryView: View {
             }
             .foregroundStyle(.secondary).padding(.horizontal, 10).padding(.top, 16).padding(.bottom, 5)
             ForEach(items) { item in
-                ClipRow(model: model, snapshot: item, card: model.cardView, selected: selectedItem?.id == item.id)
+                ClipRow(model: model, snapshot: item, card: model.cardView, selected: selectedID == item.id)
                     .id(item.id)
             }
         }
@@ -154,19 +154,60 @@ struct HistoryView: View {
 
     private var emptyState: some View {
         let searching = !model.search.isEmpty || model.filter != nil
-        let paused = model.isPaused && !searching
+        let state = model.captureState
+        let title: String
+        let message: String
+        let symbol: String
+        if searching {
+            title = "Keine passenden Einträge"
+            message = "Versuche einen anderen Suchbegriff oder setze die Filter zurück."
+            symbol = "magnifyingglass"
+        } else {
+            switch state {
+            case .unavailable:
+                title = "Verlauf noch nicht verfügbar"
+                message = "Prüfe, ob macOS auf deine Schlüsselbund-Freigabe wartet."
+                symbol = "lock"
+            case .setup:
+                title = "Deine Zwischenablage, griffbereit"
+                message = "Richte SmartClip ein und aktiviere die Aufzeichnung."
+                symbol = "doc.on.clipboard"
+            case .paused:
+                title = "Aufzeichnung pausiert"
+                message = "Setze die Aufzeichnung fort, um neue Kopien zu speichern."
+                symbol = "pause"
+            case .denied:
+                title = "Zugriff auf die Zwischenablage gesperrt"
+                message = "Erlaube SmartClip den Zugriff in den macOS-Systemeinstellungen."
+                symbol = "hand.raised"
+            case .active:
+                title = "Platz für deine nächsten Ideen"
+                message = "Kopiere einen Text, ein Bild oder eine Datei.\nSmartClip hält es hier für dich bereit."
+                symbol = "doc.on.clipboard"
+            }
+        }
         return VStack(spacing: 12) {
-            Image(systemName: searching ? "magnifyingglass" : paused ? "pause" : "doc.on.clipboard")
+            Image(systemName: symbol)
                 .font(.system(size: 27, weight: .light)).foregroundStyle(ClipTheme.accent)
                 .frame(width: 66, height: 66)
                 .background(ClipTheme.accent.opacity(0.08), in: RoundedRectangle(cornerRadius: 19))
-            Text(searching ? "Keine passenden Einträge" : paused ? "Aufzeichnung pausiert" : "Platz für deine nächsten Ideen")
-                .font(.system(size: 15, weight: .semibold))
-            Text(searching ? "Versuche einen anderen Suchbegriff oder Filter."
-                 : paused ? "Setze die Aufzeichnung fort, um neue Kopien zu speichern."
-                 : "Kopiere einen Text, ein Bild oder eine Datei.\nSmartClip hält es hier für dich bereit.")
-                .font(.system(size: 12)).foregroundStyle(.secondary)
+                .accessibilityHidden(true)
+            Text(title).font(.system(size: 15, weight: .semibold))
+            Text(message).font(.system(size: 12)).foregroundStyle(.secondary)
                 .multilineTextAlignment(.center).lineSpacing(3)
+            if searching {
+                Button("Suche und Filter zurücksetzen") { selectedID = nil; model.resetSearch(); searchFocused = true }
+                    .buttonStyle(.bordered).padding(.top, 4)
+            } else if state == .paused {
+                Button("Aufzeichnung fortsetzen") { model.setPaused(false) }
+                    .buttonStyle(.bordered).padding(.top, 4)
+            } else if state == .setup {
+                Button("SmartClip einrichten") { model.onOpenSettings?() }
+                    .buttonStyle(.bordered).padding(.top, 4)
+            } else if state == .denied || state == .unavailable, model.recoveryAction != nil {
+                Button(model.recoveryAction?.title ?? "Problem beheben") { model.performRecovery() }
+                    .buttonStyle(.bordered).padding(.top, 4)
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(24)
@@ -178,6 +219,10 @@ struct HistoryView: View {
                 HStack(alignment: .top, spacing: 7) {
                     Image(systemName: "info.circle")
                     Text(model.statusMessage).frame(maxWidth: .infinity, alignment: .leading)
+                    if let recovery = model.recoveryAction {
+                        Button(recovery.title) { model.performRecovery() }
+                            .buttonStyle(.link).fixedSize()
+                    }
                 }
                 .font(.system(size: 11)).foregroundStyle(.secondary)
                 .padding(.horizontal, 20).padding(.vertical, 9)
@@ -185,17 +230,26 @@ struct HistoryView: View {
             }
             Rectangle().fill(ClipTheme.line).frame(height: 1)
             HStack(spacing: 7) {
-                Circle().fill(model.isPaused || !model.onboardingComplete || !model.storageReady ? Color.orange : ClipTheme.accent)
+                Circle().fill(model.captureState == .active ? ClipTheme.accent : Color.orange)
                     .frame(width: 6, height: 6).accessibilityHidden(true)
-                Text(!model.storageReady ? "Verlauf nicht bereit" : !model.onboardingComplete ? "Noch nicht eingerichtet" : model.isPaused ? "Pausiert" : "Aufzeichnung aktiv")
+                Text(model.captureStatusLabel)
                     .font(.system(size: 11)).foregroundStyle(.secondary)
-                Button { model.setPaused(!model.isPaused) } label: {
-                    Image(systemName: model.isPaused ? "play.fill" : "pause.fill").font(.system(size: 9))
+                Menu {
+                    if model.isPaused {
+                        Button("Aufzeichnung fortsetzen", systemImage: "play.fill") { model.setPaused(false) }
+                        Divider()
+                    }
+                    Button("15 Minuten pausieren", systemImage: "timer") { model.pause(for: 15 * 60) }
+                    Button("Bis zum Neustart pausieren", systemImage: "power") { model.pauseUntilRestart() }
+                    Button("Unbegrenzt pausieren", systemImage: "pause.fill") { model.setPaused(true) }
+                } label: {
+                    Image(systemName: model.isPaused ? "play.fill" : "pause.fill")
+                        .font(.system(size: 11)).frame(width: 24, height: 24)
                 }
-                .buttonStyle(.plain).foregroundStyle(.secondary)
-                .help(model.isPaused ? "Aufzeichnung fortsetzen" : "Aufzeichnung pausieren")
-                .accessibilityLabel(model.isPaused ? "Aufzeichnung fortsetzen" : "Aufzeichnung pausieren")
-                .disabled(!model.onboardingComplete)
+                .menuStyle(.borderlessButton).menuIndicator(.hidden).foregroundStyle(.secondary)
+                .help("Aufzeichnung steuern")
+                .accessibilityLabel("Aufzeichnung steuern")
+                .disabled(!model.onboardingComplete || !model.storageReady)
                 Spacer()
                 KeyboardHint(text: "↑ ↓")
                 Text("Auswählen").font(.system(size: 10)).foregroundStyle(.secondary)
@@ -215,12 +269,10 @@ struct HistoryView: View {
     }
 
     private func moveSelection(_ offset: Int) {
-        guard !model.items.isEmpty else { return }
-        if let current = model.items.firstIndex(where: { $0.id == selectedItem?.id }) {
-            selectedID = model.items[min(max(0, current + offset), model.items.count - 1)].id
-        } else {
-            selectedID = (offset > 0 ? model.items.first : model.items.last)?.id
-        }
+        // Resolve the latest query before selecting, even within the debounce interval.
+        model.applySearchImmediately()
+        selectedID = HistoryNavigation.moved(in: model.items.map(\.id), explicit: selectedID,
+                                              search: model.search, offset: offset)
     }
 }
 
@@ -229,10 +281,13 @@ private struct ClipRow: View {
     let snapshot: ClipSummary
     // Lazy rows may retain their identity when moving between sections. Resolve
     // actions and labels from the current model instead of the old row snapshot.
-    private var item: ClipSummary { model.items.first { $0.id == snapshot.id } ?? snapshot }
+    private var item: ClipSummary { model.item(for: snapshot.id) ?? snapshot }
     let card: Bool
     let selected: Bool
     @State private var confirmUnmark = false
+    @State private var confirmExclude = false
+    @State private var editFavoriteName = false
+    @State private var favoriteDraft = ""
     @State private var hovered = false
 
     var body: some View {
@@ -246,6 +301,12 @@ private struct ClipRow: View {
                         .background((item.isSensitive ? Color.orange : item.kind.color).opacity(0.09),
                                     in: RoundedRectangle(cornerRadius: 10))
                     VStack(alignment: .leading, spacing: 7) {
+                        if let favoriteName = item.favoriteName {
+                            Label(favoriteName, systemImage: "pin.fill")
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundStyle(ClipTheme.accent)
+                                .lineLimit(1)
+                        }
                         if item.isSensitive {
                             Text("Sensibler Inhalt").font(.system(size: 13, weight: .medium))
                             Text("••••••••••••").font(.system(size: 12, design: .monospaced)).foregroundStyle(.secondary)
@@ -266,9 +327,9 @@ private struct ClipRow: View {
                         }
                         HStack(spacing: 5) {
                             SourceAppIcon(bundleID: item.sourceBundleID, size: 13)
-                            Text(item.sourceName ?? "Unbekannte App")
+                            Text(item.sourceName ?? "Unbekannte App").help("Quell-App zum Kopierzeitpunkt geschätzt")
                             Text("·").foregroundStyle(.tertiary)
-                            Text(item.lastCopiedAt, format: .relative(presentation: .numeric, unitsStyle: .abbreviated))
+                            Text(item.lastCopiedAt, style: .relative)
                             if item.hasMissingFiles {
                                 Image(systemName: "exclamationmark.triangle").foregroundStyle(.orange)
                                     .help("Originaldatei fehlt")
@@ -281,7 +342,8 @@ private struct ClipRow: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("\(item.kind.label): \(item.isSensitive ? "sensibler Eintrag" : item.preview)")
+            .accessibilityLabel("\(item.favoriteName.map { "\($0), " } ?? "")\(item.kind.label): \(item.isSensitive ? "sensibler Eintrag" : item.preview)")
+            .accessibilityAddTraits(selected ? .isSelected : [])
             VStack(alignment: .trailing, spacing: 7) {
                 HStack(spacing: 2) {
                     Button { model.pin(item) } label: {
@@ -290,7 +352,7 @@ private struct ClipRow: View {
                     }
                     .buttonStyle(.plain)
                     .foregroundStyle(item.isPinned ? ClipTheme.accent : Color.secondary)
-                    .opacity(item.isPinned || hovered || selected ? 1 : 0.25)
+                    .opacity(item.isPinned || hovered || selected ? 1 : 0.65)
                     .help(item.isPinned ? "Lösen" : "Anheften")
                     .accessibilityLabel(item.isPinned ? "Eintrag lösen" : "Eintrag anheften")
                     actions
@@ -313,6 +375,21 @@ private struct ClipRow: View {
         } message: {
             Text("Dieser Eintrag erhält dann die normale Aufbewahrungsfrist. Ein angehefteter Eintrag bleibt bis zum manuellen Löschen gespeichert.")
         }
+        .confirmationDialog("App künftig ausschließen?", isPresented: $confirmExclude) {
+            Button("\(item.sourceName ?? "Diese App") ausschließen", role: .destructive) {
+                model.excludeSourceApp(of: item)
+            }
+        } message: {
+            Text("Neue Kopien aus dieser App werden nicht mehr gespeichert. Vorhandene Einträge bleiben erhalten.")
+        }
+        .alert(item.favoriteName == nil ? "Favorit benennen" : "Favoritenname ändern",
+               isPresented: $editFavoriteName) {
+            TextField("Name", text: $favoriteDraft)
+            Button("Speichern") { model.nameFavorite(item, favoriteDraft) }
+            Button("Abbrechen", role: .cancel) {}
+        } message: {
+            Text("Der Name wird verschlüsselt gespeichert und ist über die Suche auffindbar.")
+        }
     }
 
     private var actions: some View {
@@ -320,9 +397,23 @@ private struct ClipRow: View {
             Button("Kopieren", systemImage: "doc.on.doc") { model.copy(item) }
             if item.kind == .url { Button("URL öffnen", systemImage: "arrow.up.right") { model.openURL(item) } }
             Button(item.isPinned ? "Lösen" : "Anheften", systemImage: "pin") { model.pin(item) }
+            Button(item.favoriteName == nil ? "Favorit benennen …" : "Favoritenname ändern …",
+                   systemImage: "tag") {
+                favoriteDraft = item.favoriteName ?? ""
+                editFavoriteName = true
+            }
+            if item.favoriteName != nil {
+                Button("Favoritenname entfernen", systemImage: "tag.slash") { model.nameFavorite(item, "") }
+            }
             Button(item.isSensitive ? "Als normal einstufen" : "Als sensibel einstufen", systemImage: "lock") {
                 if item.isSensitive { confirmUnmark = true }
                 else { model.markSensitive(item, true) }
+            }
+            if item.sourceBundleID != nil {
+                Divider()
+                Button("\(item.sourceName ?? "Quell-App") künftig ausschließen", systemImage: "app.badge") {
+                    confirmExclude = true
+                }
             }
             Divider()
             Button("Löschen", systemImage: "trash", role: .destructive) { model.delete(item) }

@@ -4,7 +4,7 @@ Stand: 02.10.2026. Grundlage: [Plan.md](../Plan.md).
 
 ## Ergebnis
 
-Der abschließende automatisierte Lauf wird über `zsh scripts/test.sh` ausgeführt. Die Suite umfasst **96 benannte Prüffälle** mit mehreren Einzelassertionen. Ergebnisse sind maschinenlesbar in `.build/test-results/core.json`, Konsolenausgabe in `.build/test-results/core.log`.
+Der automatisierte Lauf wird über `zsh scripts/test.sh` ausgeführt. Die Suite umfasst **110 benannte Prüffälle** mit mehreren Einzelassertionen. Ergebnisse sind maschinenlesbar in `.build/test-results/core.json`, Konsolenausgabe in `.build/test-results/core.log`.
 
 Der erste Lauf mit 54 Fällen hatte fünf reproduzierte Fehler (49 bestanden). Nach den Korrekturen und Ergänzung weiterer Integrationsprüfungen bestanden 64/64. UI-Prüfungen sind separat und zählen nicht zu diesen automatisierten Fällen.
 
@@ -33,10 +33,10 @@ Zusätzlich: sensible Inhalte erhalten beim Zurückkopieren einen ConcealedType-
 | Dateien | Mehrere Originalreferenzen, fehlende Originale, Roundtrip, vorhandene Zwischenablage bei Fehler erhalten | Finder-End-to-End noch offen |
 | Verschlüsselung | Leere/kleine/1-MiB-Daten, zufällige Nonces, falscher Schlüssel, Manipulation, abgeschnittene Daten | Kein unabhängiges Sicherheitsaudit |
 | Speicherung | Alle Arten in SQLite, zweite Verbindung/Wiederöffnung, verschlüsselte Texte/Bilddaten/Pfade in DB und WAL, korrupter Datensatz | Technische Metadaten wie Typ, Datum und App-Name bleiben unverschlüsselt |
-| Duplikate/Favoriten | Text/Bild/Dateigruppen, Zähler, Zeit/Quelle, Pin erhalten, Sensibilität erhalten, Anheften/Lösen | UI-Reihenfolge zusätzlich interaktiv geprüft |
+| Duplikate/Favoriten | Text/Bild/Dateigruppen, Zähler, Zeit/Quelle, Pin erhalten, verschlüsselter Name, Suche, Anheften/Lösen | UI-Reihenfolge zusätzlich interaktiv geprüft |
 | Suche/Filter | Inhalt und App-Name, Groß-/Kleinschreibung, Typfilter, Limit, Treffer hinter erster Seite | Sensible Inhalte absichtlich nicht im Klartext durchsuchbar |
 | Löschfristen | Alle angebotenen Fristen an exakter Grenze, niemals, Favoriten, sensible Favoriten, Wiederholung, Einstellungswechsel, abgelaufener Abruf | Zeit wird kontrolliert vorgegeben; kein tagelanger Echtzeitlauf |
-| Überwachung | Onboarding, Pause/Fortsetzen, changeCount, Ausschlüsse, verweigerter Zugriff, eigene Kopien nicht doppelt erfassen | Der OS-Zugriffsstatus wird simuliert; echte Freigabe separat prüfen |
+| Überwachung | Onboarding, manuelle/zeitgesteuerte/Neustart-Pause, changeCount, direkte Ausschlüsse, verweigerter Zugriff, eigene Kopien nicht doppelt erfassen | Der OS-Zugriffsstatus wird simuliert; echte Freigabe separat prüfen |
 | Einstellungen | Sichere Defaults, persistente Ansicht/Pause/Fristen/Ausschlüsse/Onboarding, leere Ausschlüsse | Autostart und Accessibility-Freigabe nicht automatisch verändert |
 | Kopieren | Originaltext und maskiertes Geheimnis, URL/E-Mail/Bild/Datei, Concealed-Marker, Fehlererhalt, Schließ-Callback | Automatisches Einfügen in Fremdprogramme nicht im isolierten Lauf |
 | Tastenkürzel | Native Registrierung, Konflikt, fehlgeschlagener Austausch erhält altes Kürzel, Entfernen/Freigeben, Callback | Globales physisches Tastenrouting separat prüfen |
@@ -103,3 +103,11 @@ SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX26.5.sdk swift run SmartC
 ## Erweiterung: Code und Spracherkennung
 
 Die Suite wurde um 32 Fälle auf **96 Prüffälle** erweitert: 16 Sprachmuster, mehrdeutige Syntax, Markdown-Codeblöcke, normale Texte als Negativfälle, Speicherung/Filter/Sprachsuche/Kopieren, Erkennung bereits gespeicherter Texte ohne Duplikate sowie maskierter sensibler Code. Die Spracherkennung ist eine lokale Syntaxheuristik und keine Garantie; unklare Sprache wird ausdrücklich gekennzeichnet. Sie führt keinen Code aus und verändert den kopierten Text nicht. Die Vorschau wurde auch in der kleinsten Fensterbreite gerendert.
+
+## Überprüfung der Oberfläche und Codebasis (4. Oktober 2026)
+
+Die Suite umfasst jetzt **104 Prüffälle**. Neue Prüfungen decken Ablaufgrenzen für alle Fristen und Pin-Zustände, die SQL-Bereinigung, die Suche und Tastaturauswahl, den aktuellen Zeilenindex sowie Zugriffsstatus und Wiederherstellung ab. Leere Suchergebnisse bieten ein direktes Zurücksetzen; der Status zeigt gesperrten Zwischenablage-Zugriff sichtbar an. Die Änderungen wurden zusätzlich mit Designvorschauen für kompakte Suche und pausierte Aufzeichnung geprüft.
+
+## Komfortfunktionen (8. Oktober 2026)
+
+Die Suite umfasst jetzt **110 Prüffälle**. Neu geprüft sind zeitgesteuerte Pausen, Pause bis zum Neustart, die Menüstruktur am Menüleistensymbol, direkte App-Ausschlüsse, passende Wiederherstellungsaktionen sowie verschlüsselte und durchsuchbare Favoritennamen einschließlich Datenbankmigration. Die Interaktion mit dem echten Menüleistensymbol bleibt Teil der manuellen UI-Prüfung.

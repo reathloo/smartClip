@@ -23,11 +23,14 @@ final class HotkeyManager {
     }
 
     func register(_ shortcut: Shortcut?, action: @escaping () -> Void) -> Bool {
-        self.action = action
-        if shortcut == current { return true }
+        if shortcut == current {
+            self.action = shortcut == nil ? nil : action
+            return true
+        }
         guard let shortcut else {
             if let hotkeyRef { UnregisterEventHotKey(hotkeyRef); self.hotkeyRef = nil }
             current = nil
+            self.action = nil
             return true
         }
         if handlerRef == nil {
@@ -45,6 +48,7 @@ final class HotkeyManager {
         if let hotkeyRef { UnregisterEventHotKey(hotkeyRef) }
         hotkeyRef = replacement
         current = shortcut
+        self.action = action
         return true
     }
 
