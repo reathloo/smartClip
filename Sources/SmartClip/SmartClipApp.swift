@@ -46,6 +46,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         testSession?.cleanup()
         #endif
     }
+
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        showHistory()
+        return true
+    }
+
     private var statusItem: NSStatusItem?
     private var panel: HistoryPanel?
     private var settingsWindow: NSWindow?
@@ -130,6 +136,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func toggleHistory() {
         if let panel, panel.isVisible && !panel.isMiniaturized { panel.orderOut(nil); return }
+        showHistory()
+    }
+
+    private func showHistory() {
         let frontmost = NSWorkspace.shared.frontmostApplication
         if frontmost?.processIdentifier != ProcessInfo.processInfo.processIdentifier {
             model.previousApp = frontmost
