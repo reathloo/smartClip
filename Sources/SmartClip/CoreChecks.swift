@@ -335,11 +335,12 @@ func runCoreChecks() async throws {
     integration("model.safe-defaults-and-persistent-settings") { f in
         try expect(f.model.shortcut == nil && !f.model.autoPaste && !f.model.onboardingComplete, "Unsafe first-run default")
         try expect(f.model.normalDays == 30 && f.model.sensitiveSeconds == 3_600, "Wrong retention default")
-        f.model.setCardView(true); f.model.setPaused(true); f.model.setNormalDays(90)
+        f.model.setCardView(true); f.model.setDarkMode(true); f.model.setPaused(true); f.model.setNormalDays(90)
         f.model.setSensitiveSeconds(300); f.model.setExcluded("  test.excluded  ", excluded: true)
         f.model.setExcluded("   ", excluded: true); f.model.setMonitoring(true)
         let reloaded = AppModel(defaults: f.defaults, pasteboard: f.pasteboard)
-        try expect(reloaded.cardView && reloaded.isPaused && reloaded.onboardingComplete, "Settings not persisted")
+        try expect(reloaded.cardView && reloaded.darkMode && reloaded.isPaused && reloaded.onboardingComplete,
+                   "Settings not persisted")
         try expect(reloaded.normalDays == 90 && reloaded.sensitiveSeconds == 300, "Retention not persisted")
         try expect(reloaded.excludedBundles == ["test.excluded"], "Exclusions not trimmed/persisted")
         f.model.setExcluded("test.excluded", excluded: false)

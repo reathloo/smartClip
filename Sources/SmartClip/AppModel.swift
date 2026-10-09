@@ -14,6 +14,7 @@ final class AppModel: ObservableObject {
     @Published var search = ""
     @Published var filter: ClipKind?
     @Published var cardView: Bool
+    @Published var darkMode: Bool
     @Published var statusMessage = ""
     @Published private(set) var recoveryAction: RecoveryAction?
     @Published private(set) var pauseMode: PauseMode
@@ -65,6 +66,7 @@ final class AppModel: ObservableObject {
         self.systemIntegrationsEnabled = systemIntegrationsEnabled
         self.lastChangeCount = pasteboard.changeCount
         cardView = defaults.bool(forKey: "cardView")
+        darkMode = defaults.object(forKey: "darkMode") as? Bool ?? false
         pauseMode = defaults.bool(forKey: "paused") ? .manual : .active
         recoveryAction = nil
         normalDays = defaults.object(forKey: "normalDays") as? Int ?? 30
@@ -373,6 +375,7 @@ final class AppModel: ObservableObject {
         }
     }
     func setCardView(_ value: Bool) { cardView = value; defaults.set(value, forKey: "cardView") }
+    func setDarkMode(_ value: Bool) { darkMode = value; defaults.set(value, forKey: "darkMode") }
     func setNormalDays(_ value: Int) {
         normalDays = value; defaults.set(value, forKey: "normalDays")
         try? purge(); refresh()

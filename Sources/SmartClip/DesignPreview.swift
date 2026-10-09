@@ -33,6 +33,7 @@ func renderDesignPreviews() async throws {
     for dark in [false, true] {
         let scheme: ColorScheme = dark ? .dark : .light
         let suffix = dark ? "dark" : "light"
+        model.darkMode = dark
         model.cardView = false
         try await snapshot(HistoryView(model: model), size: NSSize(width: 600, height: 680),
                            scheme: scheme, to: output.appendingPathComponent("history-\(suffix).png"))
@@ -45,6 +46,7 @@ func renderDesignPreviews() async throws {
         try await snapshot(SettingsView(model: model), size: NSSize(width: 760, height: 660),
                            scheme: scheme, to: output.appendingPathComponent("settings-\(suffix).png"))
     }
+    model.darkMode = false
     try await snapshot(SettingsView(model: model, initialTab: .history), size: NSSize(width: 760, height: 660),
                        scheme: .light, to: output.appendingPathComponent("retention-light.png"))
     try await snapshot(SettingsView(model: model, initialTab: .privacy), size: NSSize(width: 760, height: 660),

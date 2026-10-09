@@ -37,6 +37,7 @@ struct HistoryView: View {
         .tint(ClipTheme.accent)
         .background(ClipTheme.canvas)
         .frame(minWidth: 560, minHeight: 540)
+        .preferredColorScheme(model.darkMode ? .dark : .light)
         .onChange(of: model.items.map(\.id)) { _, ids in
             if let selectedID, !ids.contains(selectedID) { self.selectedID = nil }
         }
@@ -73,11 +74,16 @@ struct HistoryView: View {
             }
             .padding(3)
             .background(ClipTheme.subtleFill, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+            AppearanceToggle(isDark: model.darkMode) { setDarkMode(!model.darkMode) }
             Button { model.onOpenSettings?() } label: { Image(systemName: "gearshape") }
                 .buttonStyle(IconControlStyle()).help("Einstellungen")
                 .accessibilityLabel("Einstellungen öffnen")
         }
         .padding(.horizontal, 20).padding(.top, 16).padding(.bottom, 14)
+    }
+
+    private func setDarkMode(_ value: Bool) {
+        withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.2)) { model.setDarkMode(value) }
     }
 
     private func viewButton(_ title: String, symbol: String, cards: Bool) -> some View {

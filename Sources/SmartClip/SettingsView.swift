@@ -72,13 +72,23 @@ struct SettingsView: View {
         .tint(ClipTheme.accent)
         .background(ClipTheme.canvas)
         .frame(minWidth: 700, minHeight: 580)
+        .preferredColorScheme(model.darkMode ? .dark : .light)
     }
 
     private var sidebar: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 9) {
                 BrandMark(size: 29)
-                Text("SmartClip").font(.system(size: 15, weight: .semibold))
+                Text("SmartClip")
+                    .font(.system(size: 15, weight: .semibold))
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
+                Spacer()
+                AppearanceToggle(isDark: model.darkMode) {
+                    withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.2)) {
+                        model.setDarkMode(!model.darkMode)
+                    }
+                }
             }
             .padding(.horizontal, 10).padding(.top, 20).padding(.bottom, 27)
             ForEach(SettingsTab.allCases) { item in
@@ -106,7 +116,7 @@ struct SettingsView: View {
             .padding(.horizontal, 10).padding(.bottom, 20)
         }
         .padding(.horizontal, 12)
-        .frame(width: 176)
+        .frame(width: 210)
         .frame(maxHeight: .infinity)
         .background {
             if reduceTransparency { ClipTheme.sidebar } else { Rectangle().fill(.thinMaterial) }

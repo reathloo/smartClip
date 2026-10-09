@@ -80,6 +80,21 @@ struct ResponsiveButtonStyle: ButtonStyle {
     }
 }
 
+struct AppearanceToggle: View {
+    let isDark: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: isDark ? "sun.max.fill" : "moon.fill")
+                .symbolRenderingMode(.hierarchical)
+        }
+        .buttonStyle(IconControlStyle())
+        .help(isDark ? "Hellmodus" : "Dunkelmodus")
+        .accessibilityLabel(isDark ? "Hellmodus aktivieren" : "Dunkelmodus aktivieren")
+    }
+}
+
 struct KeyboardHint: View {
     let text: String
     var body: some View {
