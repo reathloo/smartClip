@@ -41,11 +41,15 @@ final class ClipDatabase {
                 pinned INTEGER NOT NULL DEFAULT 0,
                 copy_count INTEGER NOT NULL DEFAULT 1,
                 favorite_name BLOB,
+                retention_seconds INTEGER,
                 payload BLOB NOT NULL
             )
             """)
         if try !hasColumn("favorite_name", in: "clips") {
             try execute("ALTER TABLE clips ADD COLUMN favorite_name BLOB")
+        }
+        if try !hasColumn("retention_seconds", in: "clips") {
+            try execute("ALTER TABLE clips ADD COLUMN retention_seconds INTEGER")
         }
         try execute("CREATE INDEX IF NOT EXISTS clips_order ON clips(pinned DESC, last_copied DESC)")
     }
@@ -137,7 +141,7 @@ final class ClipDatabase {
     func list(search: String = "", kind: ClipKind? = nil, limit: Int = 200) throws -> [ClipSummary] {
         guard limit > 0 else { return [] }
         let stmt = try prepare("""
-            SELECT id, kind, last_copied, source_name, source_bundle, sensitive, pinned, copy_count, payload, favorite_name
+            SELECT id, kind, last_copied, source_name, source_bundle, sensitive, pinned, copy_count, payload, favorite_name, retention_seconds
             FROM clips ORDER BY pinned DESC, last_copied DESC
             """)
         defer { sqlite3_finalize(stmt) }
@@ -181,7 +185,9 @@ final class ClipDatabase {
                 sourceName: sourceName, sourceBundleID: columnString(stmt, 4),
                 isSensitive: sensitive, isPinned: sqlite3_column_int(stmt, 6) != 0,
                 copyCount: Int(sqlite3_column_int(stmt, 7)), preview: preview,
-                hasMissingFiles: missing, codeLanguage: codeLanguage, favoriteName: favoriteName
+                hasMissingFiles: missing, codeLanguage: codeLanguage, favoriteName: favoriteName,
+                retentionOverrideSeconds: sqlite3_column_type(stmt, 10) == SQLITE_NULL
+                    ? nil : Int(sqlite3_column_int64(stmt, 10))
             ))
         }
         return results
@@ -197,7 +203,22 @@ final class ClipDatabase {
     }
 
     func setPinned(_ pinned: Bool, for id: UUID) throws { try setFlag("pinned", value: pinned, id: id) }
-    func setSensitive(_ sensitive: Bool, for id: UUID) throws { try setFlag("sensitive", value: sensitive, id: id) }
+    func setSensitive(_ sensitive: Bool, for id: UUID) throws {
+        let stmt = try prepare("UPDATE clips SET sensitive=?, retention_seconds=NULL WHERE id=?")
+        defer { sqlite3_finalize(stmt) }
+        sqlite3_bind_int(stmt, 1, sensitive ? 1 : 0)
+        bind(id.uuidString, to: 2, in: stmt)
+        guard sqlite3_step(stmt) == SQLITE_DONE else { throw DatabaseError.sqlite(message()) }
+    }
+
+    func setRetentionOverride(seconds: Int?, for id: UUID) throws {
+        let stmt = try prepare("UPDATE clips SET retention_seconds=? WHERE id=?")
+        defer { sqlite3_finalize(stmt) }
+        if let seconds { sqlite3_bind_int64(stmt, 1, sqlite3_int64(seconds)) }
+        else { sqlite3_bind_null(stmt, 1) }
+        bind(id.uuidString, to: 2, in: stmt)
+        guard sqlite3_step(stmt) == SQLITE_DONE else { throw DatabaseError.sqlite(message()) }
+    }
 
     func setFavoriteName(_ name: String?, for id: UUID) throws {
         let stmt = try prepare("UPDATE clips SET favorite_name=? WHERE id=?")
@@ -223,22 +244,36 @@ final class ClipDatabase {
         guard sqlite3_step(stmt) == SQLITE_DONE else { throw DatabaseError.sqlite(message()) }
     }
 
+    @discardableResult
+    func deleteAll() throws -> Int {
+        try execute("DELETE FROM clips")
+        let deleted = Int(sqlite3_changes(db))
+        // Payloads are encrypted, but truncating the WAL also removes stale metadata pages.
+        try execute("PRAGMA wal_checkpoint(TRUNCATE)")
+        return deleted
+    }
+
     func purge(normalDays: Int?, sensitiveSeconds: TimeInterval, now: Date = .now) throws -> Int {
         // One atomic statement avoids a full Swift-side scan and a transaction per row.
         let stmt = try prepare("""
             DELETE FROM clips
-            WHERE (sensitive != 0 AND last_copied <= ?)
-               OR (sensitive = 0 AND pinned = 0 AND ? IS NOT NULL AND last_copied <= ?)
+            WHERE (sensitive != 0 AND last_copied +
+                    CASE WHEN retention_seconds IN (300, 3600, 86400) THEN retention_seconds ELSE ? END <= ?)
+               OR (sensitive = 0 AND retention_seconds > 0 AND last_copied + retention_seconds <= ?)
+               OR (sensitive = 0 AND retention_seconds IS NULL AND pinned = 0
+                   AND ? IS NOT NULL AND last_copied <= ?)
             """)
         defer { sqlite3_finalize(stmt) }
-        sqlite3_bind_double(stmt, 1, now.timeIntervalSince1970 - sensitiveSeconds)
+        sqlite3_bind_double(stmt, 1, sensitiveSeconds)
+        sqlite3_bind_double(stmt, 2, now.timeIntervalSince1970)
+        sqlite3_bind_double(stmt, 3, now.timeIntervalSince1970)
         if let normalDays {
             let cutoff = now.timeIntervalSince1970 - Double(normalDays) * 86_400
-            sqlite3_bind_double(stmt, 2, cutoff)
-            sqlite3_bind_double(stmt, 3, cutoff)
+            sqlite3_bind_double(stmt, 4, cutoff)
+            sqlite3_bind_double(stmt, 5, cutoff)
         } else {
-            sqlite3_bind_null(stmt, 2)
-            sqlite3_bind_null(stmt, 3)
+            sqlite3_bind_null(stmt, 4)
+            sqlite3_bind_null(stmt, 5)
         }
         guard sqlite3_step(stmt) == SQLITE_DONE else { throw DatabaseError.sqlite(message()) }
         return Int(sqlite3_changes(db))

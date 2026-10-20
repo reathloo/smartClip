@@ -361,6 +361,9 @@ private struct ClipRow: View {
                             }
                         }
                         .font(.system(size: 10)).foregroundStyle(.secondary).lineLimit(1)
+                        if item.retentionOverrideSeconds != nil {
+                            retentionNote
+                        }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
@@ -435,6 +438,7 @@ private struct ClipRow: View {
                 if item.isSensitive { confirmUnmark = true }
                 else { model.markSensitive(item, true) }
             }
+            retentionMenu
             if item.sourceBundleID != nil {
                 Divider()
                 Button("\(item.sourceName ?? "Quell-App") künftig ausschließen", systemImage: "app.badge") {
@@ -446,6 +450,54 @@ private struct ClipRow: View {
         } label: { Image(systemName: "ellipsis").font(.system(size: 12)) }
             .menuStyle(.borderlessButton).menuIndicator(.hidden).frame(width: 22, height: 24)
             .help("Eintragsaktionen").accessibilityLabel("Eintragsaktionen")
+    }
+
+    private var retentionMenu: some View {
+        Menu("Löschfrist", systemImage: "clock") {
+            retentionChoice("Globale Einstellung", seconds: nil)
+            Divider()
+            if item.isSensitive {
+                retentionChoice("5 Minuten", seconds: 300)
+                retentionChoice("1 Stunde", seconds: 3_600)
+                retentionChoice("24 Stunden", seconds: 86_400)
+                Divider()
+                Text("Für „Niemals“ zuerst als normal einstufen")
+            } else {
+                retentionChoice("7 Tage", seconds: 7 * 86_400)
+                retentionChoice("30 Tage", seconds: 30 * 86_400)
+                retentionChoice("90 Tage", seconds: 90 * 86_400)
+                retentionChoice("1 Jahr", seconds: 365 * 86_400)
+                retentionChoice("Niemals", seconds: 0)
+            }
+        }
+    }
+
+    @ViewBuilder private func retentionChoice(_ title: String, seconds: Int?) -> some View {
+        Button {
+            model.setRetentionOverride(seconds, for: item)
+        } label: {
+            if item.retentionOverrideSeconds == seconds {
+                Label(title, systemImage: "checkmark")
+            } else {
+                Text(title)
+            }
+        }
+    }
+
+    @ViewBuilder private var retentionNote: some View {
+        if let deletionDate = item.deletionDate(normalDays: model.normalDays == 0 ? nil : model.normalDays,
+                                                sensitiveSeconds: TimeInterval(model.sensitiveSeconds)) {
+            Label {
+                Text("Löschen: \(deletionDate.formatted(date: .abbreviated, time: .shortened))")
+            } icon: {
+                Image(systemName: "clock")
+            }
+            .help("Geplante Löschung: \(deletionDate.formatted(date: .long, time: .shortened))")
+            .font(.system(size: 10)).foregroundStyle(.secondary)
+        } else {
+            Label("Keine automatische Löschung", systemImage: "infinity")
+                .font(.system(size: 10)).foregroundStyle(.secondary)
+        }
     }
 }
 

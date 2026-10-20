@@ -1,36 +1,39 @@
 # SmartClip
 
-<img src="Resources/AppIcon.png" alt="SmartClip App-Icon" width="96">
+<img src="Resources/AppIcon.png" alt="SmartClip app icon" width="96">
 
-Ein lokaler, verschlüsselter Zwischenablage-Verlauf für **macOS 14+** – direkt in der Menüleiste, ohne Konto oder Cloud.
+A local, encrypted clipboard history for **macOS 14+**. SmartClip lives in the menu bar and works without an account, cloud service, or telemetry.
 
-## Funktionen
+## Features
 
-- Text, Links, E-Mails, Bilder, Dateireferenzen und Code mit Spracherkennung.
-- Suche, Typfilter, benannte Favoriten sowie Listen- und Kartenansicht.
-- Globales Tastenkürzel, optionaler Autostart und direktes Einfügen.
-- Zeitgesteuerte Pausen, direkte App-Ausschlüsse und hilfreiche Wiederherstellungsaktionen.
-- Einstellbare Löschfristen und maskierte sensible Inhalte.
+- Text, links, email addresses, images, file references, and code detection.
+- Search, type filters, named favorites, and list or card views.
+- Configurable global shortcut, optional launch at login, and direct paste.
+- Per-entry retention, automatic cleanup, and masked sensitive content.
+- Capture pauses, excluded apps, and light or dark appearance.
 
-## Starten
+## Install
 
-Voraussetzung: passende Swift-Toolchain über Xcode oder Command Line Tools.
+The free beta is an unsigned DMG for Apple Silicon. On first launch, macOS requires one confirmation under **System Settings → Privacy & Security → Open Anyway**. See the [installation guide](docs/INSTALLATION.md).
+
+## Build and test
+
+Requires a compatible Swift toolchain from Xcode or the Command Line Tools.
 
 ```sh
 zsh scripts/build-app.sh
+zsh scripts/test.sh
 open dist/SmartClip.app
 ```
 
-Beim ersten Start die Aufzeichnung aktivieren und ein Kürzel wählen, beispielsweise **⌘⇧V**. Direktes Einfügen benötigt die Bedienungshilfen-Freigabe.
+The isolated suite currently contains **113 automated checks**. See the [test report](docs/TESTBERICHT.md) for coverage and remaining system tests.
 
-## Tests
+Create the unsigned beta package with:
 
 ```sh
-zsh scripts/test.sh
+zsh scripts/package-release.sh v0.1.0-beta.1
 ```
 
-110 automatisierte Prüffälle mit isolierten Testdaten. Details und offene Systemtests: [Testbericht](docs/TESTBERICHT.md) · [Projektplan](Plan.md).
+## Notes
 
-## Hinweise
-
-Dateien bleiben Verweise auf ihre Originale; Bilder über 20 MB werden übersprungen. Die Spracherkennung ist heuristisch, eine universelle Passworterkennung gibt es nicht. Löschfristen gelten für den Verlauf, nicht für die macOS-Zwischenablage. Die App ist noch nicht signiert oder notarisiert.
+Files remain references to their originals, images above 20 MB are skipped, and code or sensitive-content detection is heuristic. Retention removes SmartClip history entries, not the current macOS clipboard. See [privacy](PRIVACY.md) and the [release process](docs/RELEASE.md).

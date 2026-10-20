@@ -2,13 +2,14 @@ import AppKit
 import SwiftUI
 
 enum SettingsTab: String, CaseIterable, Identifiable {
-    case general = "Allgemein", history = "Verlauf", privacy = "Datenschutz"
+    case general = "Allgemein", history = "Verlauf", privacy = "Datenschutz", about = "Über SmartClip"
     var id: String { rawValue }
     var symbol: String {
         switch self {
         case .general: "slider.horizontal.3"
         case .history: "clock.arrow.circlepath"
         case .privacy: "hand.raised"
+        case .about: "info.circle"
         }
     }
     var subtitle: String {
@@ -16,6 +17,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
         case .general: "So passt SmartClip in deinen Alltag."
         case .history: "Dein Verlauf, so lange du ihn brauchst."
         case .privacy: "Du bestimmst, was gespeichert wird."
+        case .about: "Version, Voraussetzungen und hilfreiche Links."
         }
     }
 }
@@ -26,6 +28,7 @@ struct SettingsView: View {
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @State private var tab: SettingsTab
     @State private var newExcludedBundle = ""
+    @State private var confirmDeleteAll = false
 
     init(model: AppModel, initialTab: SettingsTab = .general) {
         self.model = model
@@ -47,6 +50,7 @@ struct SettingsView: View {
                         case .general: generalSettings
                         case .history: historySettings
                         case .privacy: privacySettings
+                        case .about: aboutSettings
                         }
                     }
                     .id(tab)
@@ -73,6 +77,12 @@ struct SettingsView: View {
         .background(ClipTheme.canvas)
         .frame(minWidth: 700, minHeight: 580)
         .preferredColorScheme(model.darkMode ? .dark : .light)
+        .alert("Gesamten Verlauf löschen?", isPresented: $confirmDeleteAll) {
+            Button("Alles löschen", role: .destructive) { model.deleteAllHistory() }
+            Button("Abbrechen", role: .cancel) {}
+        } message: {
+            Text("Alle normalen, sensiblen und angehefteten Einträge werden unwiderruflich aus SmartClip entfernt. Einstellungen und die aktuelle macOS-Zwischenablage bleiben erhalten.")
+        }
     }
 
     private var sidebar: some View {
@@ -220,6 +230,16 @@ struct SettingsView: View {
                     .labelsHidden().frame(width: 125)
                 }
             }
+            SettingsCard("Verlauf verwalten", symbol: "trash") {
+                settingRow("Gesamten Verlauf löschen",
+                           detail: "Entfernt alle Einträge einschließlich Favoriten und sensibler Inhalte.") {
+                    Button("Alles löschen", role: .destructive) { confirmDeleteAll = true }
+                        .buttonStyle(.bordered).tint(.red)
+                }
+                Text("Die aktuelle macOS-Zwischenablage und deine Einstellungen werden dabei nicht verändert.")
+                    .font(.system(size: 11)).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             VStack(alignment: .leading, spacing: 14) {
                 note("pin", "Angeheftete Einträge bleiben erhalten. Für sensible Inhalte gilt weiterhin die kurze Frist.")
                 note("doc.on.clipboard", "Die Löschfristen gelten für SmartClip. Der Inhalt der macOS-Zwischenablage bleibt davon unberührt.")
@@ -271,6 +291,68 @@ struct SettingsView: View {
         }
     }
 
+    private var aboutSettings: some View {
+        VStack(spacing: 18) {
+            VStack(spacing: 13) {
+                BrandMark(size: 68)
+                VStack(spacing: 4) {
+                    Text("SmartClip").font(.system(size: 22, weight: .semibold))
+                    Text(AppInfo.versionLabel)
+                        .font(.system(size: 11, weight: .medium, design: .monospaced))
+                        .foregroundStyle(.secondary).textSelection(.enabled)
+                }
+                Text("Dein lokaler, verschlüsselter Zwischenablage-Verlauf für den Mac.")
+                    .font(.system(size: 12)).foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+            }
+            .padding(.vertical, 10).frame(maxWidth: .infinity)
+
+            SettingsCard("System", symbol: "desktopcomputer") {
+                settingRow("Voraussetzung", detail: "Optimiert für aktuelle Macs.") {
+                    Text("macOS 14+ · Apple Silicon")
+                        .font(.system(size: 11, weight: .medium)).foregroundStyle(.secondary)
+                }
+                Divider()
+                settingRow("Verarbeitung", detail: "Kein Konto, keine Cloud und keine Telemetrie.") {
+                    Label("Lokal", systemImage: "checkmark.shield")
+                        .font(.system(size: 11, weight: .medium)).foregroundStyle(ClipTheme.accent)
+                }
+            }
+
+            SettingsCard("Links", symbol: "link") {
+                aboutLink("Neue Versionen", detail: "GitHub Releases öffnen.", symbol: "arrow.down.circle",
+                          url: "https://github.com/reathloo/smartClip/releases")
+                Divider()
+                aboutLink("Installation", detail: "Hinweise zur unsignierten Beta.", symbol: "questionmark.circle",
+                          url: "https://github.com/reathloo/smartClip/blob/main/docs/INSTALLATION.md")
+                Divider()
+                aboutLink("Datenschutz", detail: "Welche Daten SmartClip lokal speichert.", symbol: "hand.raised",
+                          url: "https://github.com/reathloo/smartClip/blob/main/PRIVACY.md")
+            }
+
+            note("exclamationmark.shield", "Diese kostenlose Beta besitzt keine Apple Developer ID und ist nicht notarisiert.")
+                .padding(.horizontal, 4)
+        }
+    }
+
+    private func aboutLink(_ title: String, detail: String, symbol: String, url: String) -> some View {
+        Link(destination: URL(string: url)!) {
+            HStack(spacing: 12) {
+                Image(systemName: symbol).foregroundStyle(ClipTheme.accent).frame(width: 18)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(title).font(.system(size: 12, weight: .medium)).foregroundStyle(.primary)
+                    Text(detail).font(.system(size: 11)).foregroundStyle(.secondary)
+                }
+                Spacer()
+                Image(systemName: "arrow.up.right")
+                    .font(.system(size: 11, weight: .semibold)).foregroundStyle(.secondary)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(ResponsiveButtonStyle()).accessibilityLabel("\(title) öffnen")
+        .padding(.vertical, 2)
+    }
+
     private func excludedAppRow(bundle: String, name: String) -> some View {
         HStack(spacing: 10) {
             SourceAppIcon(bundleID: bundle, size: 25)
@@ -316,6 +398,15 @@ struct SettingsView: View {
             Text(text).font(.system(size: 11)).lineSpacing(2).fixedSize(horizontal: false, vertical: true)
         }
         .foregroundStyle(.secondary).frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+enum AppInfo {
+    static var versionLabel: String {
+        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "Entwicklung"
+        guard let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String,
+              !build.isEmpty else { return "Version \(version)" }
+        return "Version \(version) · Build \(build)"
     }
 }
 

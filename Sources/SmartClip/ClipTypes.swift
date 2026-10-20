@@ -108,6 +108,14 @@ struct ClipSummary: Identifiable {
     let hasMissingFiles: Bool
     var codeLanguage: String? = nil
     var favoriteName: String? = nil
+    var retentionOverrideSeconds: Int? = nil
+
+    func deletionDate(normalDays: Int?, sensitiveSeconds: TimeInterval) -> Date? {
+        Retention.duration(sensitive: isSensitive, pinned: isPinned, normalDays: normalDays,
+                           sensitiveSeconds: sensitiveSeconds,
+                           overrideSeconds: retentionOverrideSeconds)
+            .map { lastCopiedAt.addingTimeInterval($0) }
+    }
 }
 
 enum ClipClassifier {
@@ -133,9 +141,30 @@ enum ClipClassifier {
 }
 
 enum Retention {
-    static func expired(lastCopiedAt: Date, sensitive: Bool, pinned: Bool, normalDays: Int?, sensitiveSeconds: TimeInterval, now: Date) -> Bool {
-        if sensitive { return now.timeIntervalSince(lastCopiedAt) >= sensitiveSeconds }
-        if pinned || normalDays == nil { return false }
-        return now.timeIntervalSince(lastCopiedAt) >= Double(normalDays!) * 86_400
+    static let normalPresets = [7 * 86_400, 30 * 86_400, 90 * 86_400, 365 * 86_400]
+    static let sensitivePresets = [300, 3_600, 86_400]
+
+    static func duration(sensitive: Bool, pinned: Bool, normalDays: Int?, sensitiveSeconds: TimeInterval,
+                         overrideSeconds: Int? = nil) -> TimeInterval? {
+        if sensitive {
+            guard let overrideSeconds, sensitivePresets.contains(overrideSeconds) else {
+                return sensitiveSeconds
+            }
+            return TimeInterval(overrideSeconds)
+        }
+        if let overrideSeconds {
+            return overrideSeconds == 0 ? nil : TimeInterval(overrideSeconds)
+        }
+        if pinned || normalDays == nil { return nil }
+        return Double(normalDays!) * 86_400
+    }
+
+    static func expired(lastCopiedAt: Date, sensitive: Bool, pinned: Bool, normalDays: Int?,
+                        sensitiveSeconds: TimeInterval, now: Date, overrideSeconds: Int? = nil) -> Bool {
+        guard let duration = duration(sensitive: sensitive, pinned: pinned, normalDays: normalDays,
+                                      sensitiveSeconds: sensitiveSeconds, overrideSeconds: overrideSeconds) else {
+            return false
+        }
+        return now.timeIntervalSince(lastCopiedAt) >= duration
     }
 }

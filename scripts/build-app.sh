@@ -6,6 +6,7 @@ if [[ -d /Library/Developer/CommandLineTools/SDKs/MacOSX26.5.sdk ]]; then
 fi
 swift build -c release
 app="dist/SmartClip.app"
+rm -rf "$app"
 mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
 cp .build/release/SmartClip "$app/Contents/MacOS/SmartClip"
 cp Resources/Info.plist "$app/Contents/Info.plist"

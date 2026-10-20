@@ -1,10 +1,10 @@
 # SmartClip – Testbericht und reproduzierbare Prüfung
 
-Stand: 02.10.2026. Grundlage: [Plan.md](../Plan.md).
+Stand: 20.10.2026.
 
 ## Ergebnis
 
-Der automatisierte Lauf wird über `zsh scripts/test.sh` ausgeführt. Die Suite umfasst **110 benannte Prüffälle** mit mehreren Einzelassertionen. Ergebnisse sind maschinenlesbar in `.build/test-results/core.json`, Konsolenausgabe in `.build/test-results/core.log`.
+Der automatisierte Lauf wird über `zsh scripts/test.sh` ausgeführt. Die Suite umfasst **113 benannte Prüffälle** mit mehreren Einzelassertionen. Ergebnisse sind maschinenlesbar in `.build/test-results/core.json`, Konsolenausgabe in `.build/test-results/core.log`.
 
 Der erste Lauf mit 54 Fällen hatte fünf reproduzierte Fehler (49 bestanden). Nach den Korrekturen und Ergänzung weiterer Integrationsprüfungen bestanden 64/64. UI-Prüfungen sind separat und zählen nicht zu diesen automatisierten Fällen.
 
@@ -111,3 +111,15 @@ Die Suite umfasst jetzt **104 Prüffälle**. Neue Prüfungen decken Ablaufgrenze
 ## Komfortfunktionen (8. Oktober 2026)
 
 Die Suite umfasst jetzt **110 Prüffälle**. Neu geprüft sind zeitgesteuerte Pausen, Pause bis zum Neustart, die Menüstruktur am Menüleistensymbol, direkte App-Ausschlüsse, passende Wiederherstellungsaktionen sowie verschlüsselte und durchsuchbare Favoritennamen einschließlich Datenbankmigration. Die Interaktion mit dem echten Menüleistensymbol bleibt Teil der manuellen UI-Prüfung.
+
+## Löschfrist pro Eintrag (12. Oktober 2026)
+
+Die Suite umfasst jetzt **112 Prüffälle**. Normale Einträge können die globale Frist gezielt mit 7, 30, 90 oder 365 Tagen sowie „Niemals“ überschreiben. Die Frist beginnt beim letzten Kopieren erneut und gilt bei einer ausdrücklichen Auswahl auch für angeheftete Einträge. Sensible Einträge bleiben auf 5 Minuten, 1 Stunde oder 24 Stunden begrenzt; eine Umstufung setzt eine zuvor gewählte Einzelfrist sicher zurück.
+
+## Unsigniertes Release-Paket (20. Oktober 2026)
+
+`zsh scripts/package-release.sh v0.1.0-beta.1` erstellt nach den Kernprüfungen ein komprimiertes ARM64-DMG samt SHA-256-Datei und Build-Manifest. Die Paketprüfung mountet das DMG schreibgeschützt und kontrolliert App, Programme-Verknüpfung, Mindestversion, Architektur, ad hoc Signatur sowie Prüfsumme. Eine simulierte Browser-Quarantäne bestätigt die erwartete Gatekeeper-Ablehnung. Der anschließende interaktive Schritt „Dennoch öffnen“ bleibt Teil der manuellen Systemabnahme.
+
+## Release-Bedienung (20. Oktober 2026)
+
+Die Suite umfasst jetzt **113 Prüffälle**. „Gesamten Verlauf löschen“ entfernt normale, sensible und angeheftete Einträge, aktualisiert das Modell und erklärt auch einen bereits leeren Verlauf. Die Aktion benötigt eine ausdrückliche Bestätigung und verändert weder Einstellungen noch die aktuelle macOS-Zwischenablage. „Über SmartClip“ zeigt Version, Build, Systemvoraussetzung, lokale Verarbeitung und Links zu Releases, Installation und Datenschutz.

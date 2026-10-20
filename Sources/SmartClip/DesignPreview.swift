@@ -20,7 +20,9 @@ func renderDesignPreviews() async throws {
     model.items = samples.enumerated().map { index, item in
         ClipSummary(id: UUID(), kind: item.0, lastCopiedAt: .now.addingTimeInterval(index == 2 ? -172_800 : -Double(120 + index * 90)),
                     sourceName: item.2, sourceBundleID: item.3, isSensitive: item.5,
-                    isPinned: item.4, copyCount: index == 0 ? 3 : 1, preview: item.1, hasMissingFiles: false, codeLanguage: item.0 == .code ? "Python" : nil)
+                    isPinned: item.4, copyCount: index == 0 ? 3 : 1, preview: item.1, hasMissingFiles: false,
+                    codeLanguage: item.0 == .code ? "Python" : nil,
+                    retentionOverrideSeconds: index == 2 ? 30 * 86_400 : nil)
     }
     if !model.items.isEmpty {
         let first = model.items[0]
@@ -51,6 +53,8 @@ func renderDesignPreviews() async throws {
                        scheme: .light, to: output.appendingPathComponent("retention-light.png"))
     try await snapshot(SettingsView(model: model, initialTab: .privacy), size: NSSize(width: 760, height: 660),
                        scheme: .light, to: output.appendingPathComponent("privacy-light.png"))
+    try await snapshot(SettingsView(model: model, initialTab: .about), size: NSSize(width: 760, height: 660),
+                       scheme: .light, to: output.appendingPathComponent("about-light.png"))
     try await snapshot(HistoryView(model: model), size: NSSize(width: 560, height: 540),
                        scheme: .light, to: output.appendingPathComponent("history-compact.png"))
     model.onboardingComplete = false

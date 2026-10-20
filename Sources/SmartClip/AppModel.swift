@@ -317,7 +317,35 @@ final class AppModel: ObservableObject {
         mutate { try $0.setSensitive(sensitive, for: item.id) }
         try? purge()
     }
+    func setRetentionOverride(_ seconds: Int?, for item: ClipSummary) {
+        guard !item.isSensitive || seconds == nil || Retention.sensitivePresets.contains(seconds!) else {
+            showStatus("Sensible Einträge können höchstens 24 Stunden gespeichert werden.")
+            return
+        }
+        guard mutate({ try $0.setRetentionOverride(seconds: seconds, for: item.id) }) else { return }
+        try? purge()
+        guard let current = self.item(for: item.id) else {
+            showStatus("Eintrag wurde gelöscht, da die gewählte Frist bereits abgelaufen war.")
+            return
+        }
+        if let deletionDate = current.deletionDate(normalDays: normalDays == 0 ? nil : normalDays,
+                                                   sensitiveSeconds: TimeInterval(sensitiveSeconds)) {
+            showStatus("Eintrag wird am \(deletionDate.formatted(date: .abbreviated, time: .shortened)) gelöscht.")
+        } else {
+            showStatus(seconds == nil ? "Globale Löschfrist wird verwendet." : "Eintrag wird nicht automatisch gelöscht.")
+        }
+    }
     func delete(_ item: ClipSummary) { mutate { try $0.delete(item.id) } }
+    func deleteAllHistory() {
+        guard let database else { return }
+        do {
+            let deleted = try database.deleteAll()
+            refresh()
+            showStatus(deleted == 0 ? "Der Verlauf ist bereits leer." : "Gesamter Verlauf gelöscht (\(deleted) Einträge).")
+        } catch {
+            showStatus(error.localizedDescription)
+        }
+    }
     @discardableResult
     private func mutate(_ action: (ClipDatabase) throws -> Void) -> Bool {
         guard let database else { return false }

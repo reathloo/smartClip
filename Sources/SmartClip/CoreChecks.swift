@@ -298,11 +298,12 @@ func runCoreChecks() async throws {
         try expect(sqlite3_prepare_v2(handle, "PRAGMA table_info(clips)", -1, &statement, nil) == SQLITE_OK,
                    "Cannot inspect migrated schema")
         defer { sqlite3_finalize(statement) }
-        var found = false
+        var columns: Set<String> = []
         while sqlite3_step(statement) == SQLITE_ROW {
-            if String(cString: sqlite3_column_text(statement, 1)) == "favorite_name" { found = true }
+            columns.insert(String(cString: sqlite3_column_text(statement, 1)))
         }
-        try expect(found, "Existing database did not receive favorite_name column")
+        try expect(columns.contains("favorite_name") && columns.contains("retention_seconds"),
+                   "Existing database did not receive new columns")
     }
     integration("database.search-filter-limit-and-mask") { f in
         try f.capture(.text("Café HELLO"))
@@ -331,6 +332,67 @@ func runCoreChecks() async throws {
         try f.db.delete(pinned.id)
         try expect(try f.db.payload(for: pinned.id) == nil, "Delete failed")
         try expect(try f.db.payload(for: UUID()) == nil, "Missing ID returns content")
+    }
+    integration("database.per-entry-retention-overrides") { f in
+        try f.capture(.text("thirty days"), at: f.time.addingTimeInterval(-8 * 86_400))
+        let thirtyDays = try f.row()
+        try f.db.setPinned(true, for: thirtyDays.id)
+        try f.db.setRetentionOverride(seconds: 30 * 86_400, for: thirtyDays.id)
+
+        try f.capture(.text("never"), at: f.time.addingTimeInterval(-400 * 86_400))
+        let never = try f.db.list().first { $0.preview == "never" }!
+        try f.db.setRetentionOverride(seconds: 0, for: never.id)
+
+        try f.capture(.text("seven days"), at: f.time.addingTimeInterval(-8 * 86_400))
+        let sevenDays = try f.db.list().first { $0.preview == "seven days" }!
+        try f.db.setPinned(true, for: sevenDays.id)
+        try f.db.setRetentionOverride(seconds: 7 * 86_400, for: sevenDays.id)
+
+        try expect(try f.db.purge(normalDays: 7, sensitiveSeconds: 3_600, now: f.time) == 1,
+                   "Per-entry expiry did not override pin/global policy")
+        let survivors = try f.db.list()
+        try expect(survivors.contains { $0.id == thirtyDays.id && $0.retentionOverrideSeconds == 30 * 86_400 },
+                   "30-day override was lost")
+        try expect(survivors.contains { $0.id == never.id && $0.retentionOverrideSeconds == 0 },
+                   "Never override expired")
+
+        try f.db.capture(.text("thirty days"), sourceName: "Again", sourceBundleID: nil,
+                         sensitive: false, at: f.time)
+        let refreshed = try f.db.list().first { $0.id == thirtyDays.id }!
+        try expect(refreshed.retentionOverrideSeconds == 30 * 86_400 && refreshed.lastCopiedAt == f.time,
+                   "Duplicate did not preserve and restart entry retention")
+    }
+    integration("model.delete-all-history") { f in
+        try f.capture(.text("normal"))
+        try f.capture(.text("secret"), sensitive: true)
+        try f.capture(.text("favorite"))
+        let favorite = try f.db.list().first { $0.preview == "favorite" }!
+        try f.db.setPinned(true, for: favorite.id)
+        try f.write("system clipboard remains")
+        f.model.refresh()
+        try expect(f.model.items.count == 3, "Delete-all fixture incomplete")
+        f.model.deleteAllHistory()
+        try expect(try f.db.list().isEmpty && f.model.items.isEmpty, "Delete-all kept history entries")
+        try expect(f.pasteboard.string(forType: .string) == "system clipboard remains",
+                   "Delete-all changed the system clipboard")
+        try expect(f.model.normalDays == 30, "Delete-all changed settings")
+        try expect(f.model.statusMessage.contains("3 Einträge"), "Delete-all result was not explained")
+        f.model.deleteAllHistory()
+        try expect(f.model.statusMessage.contains("bereits leer"), "Empty delete-all was not explained")
+    }
+    integration("model.per-entry-retention-and-sensitive-reset") { f in
+        try f.capture(.text("custom retention"))
+        f.model.refresh()
+        let item = f.model.items[0]
+        f.model.setRetentionOverride(30 * 86_400, for: item)
+        try expect(f.model.item(for: item.id)?.retentionOverrideSeconds == 30 * 86_400,
+                   "Model did not apply entry retention")
+        f.model.markSensitive(f.model.item(for: item.id)!, true)
+        try expect(f.model.item(for: item.id)?.retentionOverrideSeconds == nil,
+                   "Sensitive classification kept an incompatible normal override")
+        f.model.setRetentionOverride(0, for: f.model.item(for: item.id)!)
+        try expect(f.model.item(for: item.id)?.retentionOverrideSeconds == nil,
+                   "Sensitive entry accepted never retention")
     }
     integration("model.safe-defaults-and-persistent-settings") { f in
         try expect(f.model.shortcut == nil && !f.model.autoPaste && !f.model.onboardingComplete, "Unsafe first-run default")
