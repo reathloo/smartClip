@@ -330,7 +330,7 @@ final class AppModel: ObservableObject {
         }
         if let deletionDate = current.deletionDate(normalDays: normalDays == 0 ? nil : normalDays,
                                                    sensitiveSeconds: TimeInterval(sensitiveSeconds)) {
-            showStatus("The entry will be deleted on \(deletionDate.formatted(date: .abbreviated, time: .shortened)).")
+            showStatus("The entry will be deleted on \(deletionDate.formatted(Date.FormatStyle(date: .abbreviated, time: .shortened, locale: Locale(identifier: "en_US")))).")
         } else {
             showStatus(seconds == nil ? "The global retention setting is used." : "The entry will not be deleted automatically.")
         }
@@ -382,7 +382,7 @@ final class AppModel: ObservableObject {
         defaults.set(false, forKey: "paused")
         pauseMode = .until(end)
         schedulePauseTimer(seconds: seconds)
-        showStatus("Capture paused until \(end.formatted(date: .omitted, time: .shortened)).")
+        showStatus("Capture paused until \(end.formatted(Date.FormatStyle(date: .omitted, time: .shortened, locale: Locale(identifier: "en_US")))).")
     }
     func pauseUntilRestart() {
         pauseTimer?.invalidate()

@@ -26,7 +26,7 @@ enum PauseMode: Equatable {
         switch self {
         case .active: "Capture active"
         case .manual: "Paused"
-        case .until(let date): "Paused until \(date.formatted(date: .omitted, time: .shortened))"
+        case .until(let date): "Paused until \(date.formatted(Date.FormatStyle(date: .omitted, time: .shortened, locale: Locale(identifier: "en_US"))))"
         case .untilRestart: "Paused until next launch"
         }
     }

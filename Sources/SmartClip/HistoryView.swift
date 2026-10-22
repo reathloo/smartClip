@@ -38,6 +38,7 @@ struct HistoryView: View {
         .background(ClipTheme.canvas)
         .frame(minWidth: 560, minHeight: 540)
         .preferredColorScheme(model.darkMode ? .dark : .light)
+        .environment(\.locale, Locale(identifier: "en_US"))
         .onChange(of: model.items.map(\.id)) { _, ids in
             if let selectedID, !ids.contains(selectedID) { self.selectedID = nil }
         }
@@ -488,11 +489,11 @@ private struct ClipRow: View {
         if let deletionDate = item.deletionDate(normalDays: model.normalDays == 0 ? nil : model.normalDays,
                                                 sensitiveSeconds: TimeInterval(model.sensitiveSeconds)) {
             Label {
-                Text("Delete: \(deletionDate.formatted(date: .abbreviated, time: .shortened))")
+                Text("Delete: \(deletionDate.formatted(Date.FormatStyle(date: .abbreviated, time: .shortened, locale: Locale(identifier: "en_US"))))")
             } icon: {
                 Image(systemName: "clock")
             }
-            .help("Scheduled deletion: \(deletionDate.formatted(date: .long, time: .shortened))")
+            .help("Scheduled deletion: \(deletionDate.formatted(Date.FormatStyle(date: .long, time: .shortened, locale: Locale(identifier: "en_US"))))")
             .font(.system(size: 10)).foregroundStyle(.secondary)
         } else {
             Label("No automatic deletion", systemImage: "infinity")

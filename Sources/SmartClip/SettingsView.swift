@@ -77,6 +77,7 @@ struct SettingsView: View {
         .background(ClipTheme.canvas)
         .frame(minWidth: 700, minHeight: 580)
         .preferredColorScheme(model.darkMode ? .dark : .light)
+        .environment(\.locale, Locale(identifier: "en_US"))
         .alert("Delete all history?", isPresented: $confirmDeleteAll) {
             Button("Delete all", role: .destructive) { model.deleteAllHistory() }
             Button("Cancel", role: .cancel) {}
