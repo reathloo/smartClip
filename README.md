@@ -16,17 +16,19 @@ A local, encrypted clipboard history for **macOS 14+**. SmartClip lives in the m
 
 The free beta is an unsigned DMG for Apple Silicon. On first launch, macOS requires one confirmation under **System Settings → Privacy & Security → Open Anyway**. See the [installation guide](docs/INSTALLATION.md).
 
-## Build and test
+## Fast local testing
 
 Requires a compatible Swift toolchain from Xcode or the Command Line Tools.
 
 ```sh
-zsh scripts/build-app.sh
-zsh scripts/test.sh
-open dist/SmartClip.app
+zsh scripts/run-dev.sh          # build and restart the real app
+zsh scripts/run-dev.sh --ui     # isolated UI preview with sample data
+zsh scripts/run-dev.sh --check  # run all checks, then restart the app
 ```
 
-The isolated suite currently contains **113 automated checks**. See the [test report](docs/TESTBERICHT.md) for coverage and remaining system tests.
+Use `--ui` for visual changes because it avoids clipboard, Keychain, hotkey, and login-item side effects. Use the real app for integration checks. The isolated suite currently contains **113 automated checks**. See the [test report](docs/TESTBERICHT.md) for coverage and remaining system tests.
+
+## Release build
 
 Create the unsigned beta package with:
 
