@@ -5,7 +5,7 @@ enum CodeLanguage: String {
     case swift = "Swift", shell = "Shell", json = "JSON", html = "HTML", css = "CSS"
     case sql = "SQL", go = "Go", rust = "Rust", java = "Java"
     case c = "C", cpp = "C++", csharp = "C#", php = "PHP"
-    case unknown = "Sprache unklar"
+    case unknown = "Unknown language"
 }
 
 /// Conservative, local syntax heuristics. A short snippet can fit several languages;

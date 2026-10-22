@@ -110,14 +110,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func makeStatusMenu() -> NSMenu {
         let menu = NSMenu()
         if model.isPaused {
-            menu.addItem(withTitle: "Aufzeichnung fortsetzen", action: #selector(resumeCapture), keyEquivalent: "")
+            menu.addItem(withTitle: "Resume capture", action: #selector(resumeCapture), keyEquivalent: "")
             menu.addItem(.separator())
         }
-        menu.addItem(withTitle: "15 Minuten pausieren", action: #selector(pauseFor15Minutes), keyEquivalent: "")
-        menu.addItem(withTitle: "Bis zum Neustart pausieren", action: #selector(pauseUntilNextLaunch), keyEquivalent: "")
+        menu.addItem(withTitle: "Pause for 15 minutes", action: #selector(pauseFor15Minutes), keyEquivalent: "")
+        menu.addItem(withTitle: "Pause until next launch", action: #selector(pauseUntilNextLaunch), keyEquivalent: "")
         menu.addItem(.separator())
-        menu.addItem(withTitle: "Einstellungen …", action: #selector(openSettingsFromMenu), keyEquivalent: ",")
-        menu.addItem(withTitle: "SmartClip beenden", action: #selector(quitFromMenu), keyEquivalent: "q")
+        menu.addItem(withTitle: "Settings …", action: #selector(openSettingsFromMenu), keyEquivalent: ",")
+        menu.addItem(withTitle: "Quit SmartClip", action: #selector(quitFromMenu), keyEquivalent: "q")
         for item in menu.items { item.target = self }
         return menu
     }
@@ -164,7 +164,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if settingsWindow == nil {
             let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 760, height: 660),
                                   styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
-            window.title = "SmartClip Einstellungen"
+            window.title = "SmartClip Settings"
             window.isReleasedWhenClosed = false
             window.minSize = NSSize(width: 700, height: 600)
             window.titlebarAppearsTransparent = true

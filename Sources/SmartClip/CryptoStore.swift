@@ -8,8 +8,8 @@ enum CryptoStoreError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .keychain(let status): "Schlüsselbundfehler: \(status)"
-        case .missingData: "Verschlüsselte Daten sind unvollständig."
+        case .keychain(let status): "Keychain error: \(status)"
+        case .missingData: "Encrypted data is incomplete."
         }
     }
 }

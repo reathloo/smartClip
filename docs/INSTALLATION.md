@@ -1,38 +1,38 @@
-# SmartClip installieren
+# Install SmartClip
 
-## Voraussetzungen
+## Requirements
 
-- Mac mit Apple Silicon (M1 oder neuer)
-- macOS 14 oder neuer
+- Mac with Apple Silicon (M1 or newer)
+- macOS 14 or newer
 
 ## Installation
 
-1. `SmartClip-0.1.0-beta.1-macOS-arm64.dmg` herunterladen.
-2. Optional die Prüfsumme im Terminal kontrollieren:
+1. Download `SmartClip-0.1.0-beta.1-macOS-arm64.dmg`.
+2. Optionally verify the checksum in Terminal:
 
    ```sh
    shasum -a 256 -c SmartClip-0.1.0-beta.1-macOS-arm64.dmg.sha256
    ```
 
-3. Das DMG öffnen und **SmartClip.app** auf **Programme** ziehen.
-4. SmartClip in Programme einmal öffnen. macOS meldet, dass der Entwickler nicht verifiziert werden kann.
-5. **Systemeinstellungen → Datenschutz & Sicherheit** öffnen und bei SmartClip **Dennoch öffnen** wählen.
-6. Im folgenden Dialog erneut **Öffnen** wählen.
+3. Open the DMG and drag **SmartClip.app** to **Applications**.
+4. Open SmartClip once from Applications. macOS will report that it cannot verify the developer.
+5. Open **System Settings → Privacy & Security** and choose **Open Anyway** for SmartClip.
+6. Choose **Open** again in the confirmation dialog.
 
-Diese Bestätigung ist nötig, weil die kostenlose Beta keine Apple Developer ID und keine Apple-Notarisierung besitzt. Sie gilt anschließend als lokale Ausnahme für diese App. Apples Beschreibung dieses Ablaufs: [Eine App eines unbekannten Entwicklers öffnen](https://support.apple.com/de-de/guide/mac-help/mh40616/mac).
+This confirmation is required because the free beta has no Apple Developer ID and is not notarized. macOS then records a local exception for this app. See Apple's guide: [Open a Mac app from an unidentified developer](https://support.apple.com/en-us/guide/mac-help/mh40616/mac).
 
-## Erster Start
+## First launch
 
-- Zwischenablage-Aufzeichnung aktivieren.
-- Ein globales Tastenkürzel wählen; SmartClip schlägt `⌘⇧V` vor.
-- „Nur kopieren“ funktioniert ohne Bedienungshilfen-Freigabe.
-- Automatisches Einfügen benötigt die Freigabe unter **Datenschutz & Sicherheit → Bedienungshilfen**.
-- Autostart ist optional und lässt sich in SmartClip aktivieren.
+- Enable clipboard capture.
+- Choose a global keyboard shortcut. SmartClip suggests `⌘⇧V`.
+- Copy only works without Accessibility permission.
+- Automatic paste requires permission under **Privacy & Security → Accessibility**.
+- Launch at login is optional and can be enabled in SmartClip.
 
-## Aktualisieren
+## Update
 
-SmartClip beenden, das neue DMG öffnen und die vorhandene App in Programme ersetzen. Verlauf und Einstellungen liegen außerhalb des App-Pakets und bleiben dabei erhalten.
+Quit SmartClip, open the new DMG, and replace the existing app in Applications. History and settings are stored outside the app bundle and remain available.
 
-## Deinstallieren
+## Uninstall
 
-SmartClip beenden, Autostart vorher deaktivieren und die App aus Programme löschen. Verlauf und Einstellungen werden dadurch nicht automatisch entfernt.
+Quit SmartClip, disable launch at login, and remove the app from Applications. This does not automatically remove history or settings.

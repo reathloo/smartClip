@@ -109,7 +109,7 @@ func runCoreChecks() async throws {
                          ("https://example.org with spaces", .text), ("a@b", .text)] {
         test("classification.\(text)") { try expect(ClipPayload.text(text).kind == kind, "Wrong content type") }
     }
-    for card in ["4111 1111 1111 1111", "5555-5555-5555-4444", "378282246310005", "Karte: 6011111111111117."] {
+    for card in ["4111 1111 1111 1111", "5555-5555-5555-4444", "378282246310005", "Card: 6011111111111117."] {
         test("sensitive.valid-card.\(card)") { try expect(ClipClassifier.isSensitive(text: card), "Valid Luhn number missed") }
     }
     for value in ["4111111111111112", "0000000000000000", "123456789012", "1234567890123456789012345", "tR!cky-password-42", "ordinary text"] {
@@ -259,11 +259,11 @@ func runCoreChecks() async throws {
     }
     integration("database.encrypted-named-favorite-search-and-dedup") { f in
         let secretName = "Mein geheimer Textbaustein"
-        try f.capture(.text("wiederverwendbarer Inhalt"))
+        try f.capture(.text("reusable content"))
         let id = try f.row().id
         try f.db.setFavoriteName(secretName, for: id)
         try f.db.setPinned(true, for: id)
-        try f.capture(.text("wiederverwendbarer Inhalt"), at: f.time.addingTimeInterval(10))
+        try f.capture(.text("reusable content"), at: f.time.addingTimeInterval(10))
         let favorite = try f.db.list(search: "Textbaustein").first
         try expect(favorite?.id == id && favorite?.favoriteName == secretName && favorite?.isPinned == true,
                    "Named favorite was not searchable or survived deduplication")
@@ -376,9 +376,9 @@ func runCoreChecks() async throws {
         try expect(f.pasteboard.string(forType: .string) == "system clipboard remains",
                    "Delete-all changed the system clipboard")
         try expect(f.model.normalDays == 30, "Delete-all changed settings")
-        try expect(f.model.statusMessage.contains("3 Einträge"), "Delete-all result was not explained")
+        try expect(f.model.statusMessage.contains("3 entries"), "Delete-all result was not explained")
         f.model.deleteAllHistory()
-        try expect(f.model.statusMessage.contains("bereits leer"), "Empty delete-all was not explained")
+        try expect(f.model.statusMessage.contains("already empty"), "Empty delete-all was not explained")
     }
     integration("model.per-entry-retention-and-sensitive-reset") { f in
         try f.capture(.text("custom retention"))
@@ -423,14 +423,14 @@ func runCoreChecks() async throws {
     }
     integration("model.temporary-and-restart-pause") { f in
         f.model.pause(for: 15 * 60)
-        try expect(f.model.isPaused && f.model.captureStatusLabel.contains("bis"), "Timed pause not visible")
+        try expect(f.model.isPaused && f.model.captureStatusLabel.contains("until"), "Timed pause not visible")
         try expect(f.defaults.bool(forKey: "paused") == false, "Timed pause persisted as manual pause")
         f.model.updateTimedPause(at: f.time.addingTimeInterval(899))
         try expect(f.model.isPaused, "Timed pause ended early")
         f.model.updateTimedPause(at: f.time.addingTimeInterval(900))
         try expect(!f.model.isPaused, "Timed pause did not end")
         f.model.pauseUntilRestart()
-        try expect(f.model.isPaused && f.model.captureStatusLabel.contains("Neustart"), "Restart pause not visible")
+        try expect(f.model.isPaused && f.model.captureStatusLabel.contains("next launch"), "Restart pause not visible")
         let relaunched = AppModel(defaults: f.defaults, pasteboard: f.pasteboard)
         try expect(!relaunched.isPaused, "Restart pause survived relaunch")
     }
@@ -440,7 +440,7 @@ func runCoreChecks() async throws {
         try f.write("excluded"); f.poll(bundle: "test.excluded")
         try expect(try f.db.list().isEmpty, "Excluded app captured")
         try f.write("denied"); f.poll(denied: true)
-        try expect(try f.db.list().isEmpty && f.model.statusMessage.contains("gesperrt"), "Denial not respected/explained")
+        try expect(try f.db.list().isEmpty && f.model.statusMessage.contains("blocked"), "Denial not respected/explained")
         try f.write("allowed"); f.poll()
         try expect(try f.db.list().count == 1, "Allowed copy not captured")
     }
@@ -453,7 +453,7 @@ func runCoreChecks() async throws {
         try f.write("denied"); f.poll(denied: true)
         try expect(f.model.recoveryAction == .openClipboardSettings, "Denied access has no recovery action")
         f.model.performRecovery()
-        try expect(f.model.statusMessage.contains("Testmodus"), "Recovery action was not routed safely in tests")
+        try expect(f.model.statusMessage.contains("test mode"), "Recovery action was not routed safely in tests")
     }
     integration("model.copy-original-secret-and-no-self-recapture") { f in
         f.model.setMonitoring(true)
@@ -488,7 +488,7 @@ func runCoreChecks() async throws {
         try f.write("keep this")
         f.model.copy(try f.row())
         try expect(f.pasteboard.string(forType: .string) == "keep this", "Missing file cleared clipboard")
-        try expect(f.model.statusMessage.contains("fehlen"), "Missing file not explained")
+        try expect(f.model.statusMessage.contains("missing"), "Missing file not explained")
     }
     integration("model.expired-secret-cannot-be-revived-by-copy") { f in
         try f.capture(.text("expired"), sensitive: true, at: f.time.addingTimeInterval(-3_601))
@@ -777,11 +777,11 @@ func runCoreChecks() async throws {
     integration("menu-bar.pause-actions") { f in
         let delegate = AppDelegate(model: f.model)
         var titles = delegate.makeStatusMenu().items.map(\.title)
-        try expect(titles.contains("15 Minuten pausieren") && titles.contains("Bis zum Neustart pausieren"),
+        try expect(titles.contains("Pause for 15 minutes") && titles.contains("Pause until next launch"),
                    "Menu-bar pause actions missing")
         f.model.pauseUntilRestart()
         titles = delegate.makeStatusMenu().items.map(\.title)
-        try expect(titles.first == "Aufzeichnung fortsetzen", "Paused menu cannot resume capture")
+        try expect(titles.first == "Resume capture", "Paused menu cannot resume capture")
     }
 
     func startupTest(_ name: String, _ body: (Fixture) async throws -> Void) async {
@@ -801,7 +801,7 @@ func runCoreChecks() async throws {
         await model.start(databaseURL: f.directory.appendingPathComponent("startup.sqlite")) {
             throw CryptoStoreError.keychain(-25293)
         }
-        try expect(model.statusMessage.contains("Verlauf konnte nicht geöffnet"), "Key failure hidden")
+        try expect(model.statusMessage.contains("Could not open history"), "Key failure hidden")
         model.setMonitoring(true); try f.write("not stored")
         model.processChanges(sourceName: nil, sourceBundleID: nil)
         try expect(model.items.isEmpty, "Recording started without a key")
@@ -817,11 +817,11 @@ func runCoreChecks() async throws {
         } }
         try await Task.sleep(for: .milliseconds(30))
         let responsive = Date().timeIntervalSince(start) < 1
-        let waiting = model.statusMessage.contains("Schlüsselbund")
+        let waiting = model.statusMessage.contains("Keychain")
         gate.signal()
         await task.value
         try expect(responsive && waiting, "Main actor blocked while loading key")
-        try expect(model.statusMessage == "Verlauf bereit.", "Successful startup not completed")
+        try expect(model.statusMessage == "History ready.", "Successful startup not completed")
         model.setMonitoring(true); try f.write("after startup")
         model.processChanges(sourceName: "Test", sourceBundleID: "test.startup")
         try expect(model.items.count == 1, "Capture unavailable after startup")

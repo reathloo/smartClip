@@ -22,10 +22,10 @@ final class UITestSession {
         model = AppModel(defaults: defaults, pasteboard: pasteboard, database: db, systemIntegrationsEnabled: false)
         let samples: [(String, Bool, String, String)] = [
             ("https://example.org", false, "Safari", "com.apple.Safari"),
-            ("SmartClip Testnotiz", false, "Notizen", "com.apple.Notes"),
+            ("SmartClip test note", false, "Notes", "com.apple.Notes"),
             ("def greet(name):\n    return name", false, "Visual Studio Code", "com.microsoft.VSCode"),
-            ("hallo@example.org", false, "Mail", "com.apple.mail"),
-            ("synthetic-secret-42", true, "Test-Passwortmanager", "dev.smartclip.test-vault")
+            ("hello@example.org", false, "Mail", "com.apple.mail"),
+            ("synthetic-secret-42", true, "Test Password Manager", "dev.smartclip.test-vault")
         ]
         for (index, sample) in samples.enumerated() {
             try db.capture(.text(sample.0), sourceName: sample.2, sourceBundleID: sample.3,
@@ -37,7 +37,7 @@ final class UITestSession {
                        sourceName: "Finder", sourceBundleID: nil, sensitive: false)
         model.setMonitoring(true)
         model.refresh()
-        model.showStatus("Testmodus: Beispieldaten und separate Zwischenablage.")
+        model.showStatus("Test mode: sample data and a separate clipboard.")
     }
 
     func cleanup() {

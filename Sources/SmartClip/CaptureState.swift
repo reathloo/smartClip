@@ -5,11 +5,11 @@ enum CaptureState {
 
     var label: String {
         switch self {
-        case .unavailable: "Verlauf nicht bereit"
-        case .setup: "Noch nicht eingerichtet"
-        case .paused: "Pausiert"
-        case .denied: "Zugriff gesperrt"
-        case .active: "Aufzeichnung aktiv"
+        case .unavailable: "History not ready"
+        case .setup: "Not set up yet"
+        case .paused: "Paused"
+        case .denied: "Access blocked"
+        case .active: "Capture active"
         }
     }
 }
@@ -24,10 +24,10 @@ enum PauseMode: Equatable {
 
     func label(now: Date = .now) -> String {
         switch self {
-        case .active: "Aufzeichnung aktiv"
-        case .manual: "Pausiert"
-        case .until(let date): "Pausiert bis \(date.formatted(date: .omitted, time: .shortened))"
-        case .untilRestart: "Pausiert bis zum Neustart"
+        case .active: "Capture active"
+        case .manual: "Paused"
+        case .until(let date): "Paused until \(date.formatted(date: .omitted, time: .shortened))"
+        case .untilRestart: "Paused until next launch"
         }
     }
 }
@@ -40,9 +40,9 @@ enum RecoveryAction: Equatable {
 
     var title: String {
         switch self {
-        case .retryStorage: "Erneut versuchen"
-        case .openClipboardSettings, .openAccessibilitySettings: "Systemeinstellungen öffnen"
-        case .openSmartClipSettings: "Kürzel ändern"
+        case .retryStorage: "Try again"
+        case .openClipboardSettings, .openAccessibilitySettings: "Open System Settings"
+        case .openSmartClipSettings: "Change shortcut"
         }
     }
 }

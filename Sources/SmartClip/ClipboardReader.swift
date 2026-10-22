@@ -15,12 +15,12 @@ enum ClipboardReader {
             return .captured(.files(paths), sensitive: ClipClassifier.isSensitive(text: nil, pasteboardTypes: types))
         }
         if let data = pasteboard.data(forType: .png) ?? pasteboard.data(forType: .tiff) {
-            guard data.count <= 20 * 1_024 * 1_024 else { return .skipped("Bild übersprungen: größer als 20 MB.") }
+            guard data.count <= 20 * 1_024 * 1_024 else { return .skipped("Image skipped: larger than 20 MB.") }
             guard let bitmap = NSBitmapImageRep(data: data),
                   let png = bitmap.representation(using: .png, properties: [:]) else {
-                return .skipped("Bild übersprungen: Bilddaten sind beschädigt oder nicht lesbar.")
+                return .skipped("Image skipped: image data is corrupted or unreadable.")
             }
-            guard png.count <= 20 * 1_024 * 1_024 else { return .skipped("Bild übersprungen: größer als 20 MB.") }
+            guard png.count <= 20 * 1_024 * 1_024 else { return .skipped("Image skipped: larger than 20 MB.") }
             return .captured(.image(png), sensitive: ClipClassifier.isSensitive(text: nil, pasteboardTypes: types))
         }
         if let text = pasteboard.string(forType: .string) ?? pasteboard.string(forType: .URL), !text.isEmpty {

@@ -22,8 +22,8 @@ struct HistoryView: View {
                 ScrollViewReader { proxy in
                     ScrollView {
                         LazyVStack(spacing: model.cardView ? 10 : 4) {
-                            entrySection("Angeheftet", pinned: true)
-                            entrySection("Zuletzt kopiert", pinned: false)
+                            entrySection("Pinned", pinned: true)
+                            entrySection("Recently copied", pinned: false)
                         }
                         .padding(.horizontal, 12).padding(.bottom, 14)
                     }
@@ -65,19 +65,19 @@ struct HistoryView: View {
             BrandMark()
             VStack(alignment: .leading, spacing: 2) {
                 Text("SmartClip").font(.system(size: 17, weight: .semibold))
-                Text("Alles Kopierte. Griffbereit.").font(.system(size: 11)).foregroundStyle(.secondary)
+                Text("Everything you copied. Within reach.").font(.system(size: 11)).foregroundStyle(.secondary)
             }
             Spacer()
             HStack(spacing: 2) {
-                viewButton("Liste", symbol: "list.bullet", cards: false)
-                viewButton("Karten", symbol: "rectangle.grid.1x2", cards: true)
+                viewButton("List", symbol: "list.bullet", cards: false)
+                viewButton("Cards", symbol: "rectangle.grid.1x2", cards: true)
             }
             .padding(3)
             .background(ClipTheme.subtleFill, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
             AppearanceToggle(isDark: model.darkMode) { setDarkMode(!model.darkMode) }
             Button { model.onOpenSettings?() } label: { Image(systemName: "gearshape") }
-                .buttonStyle(IconControlStyle()).help("Einstellungen")
-                .accessibilityLabel("Einstellungen öffnen")
+                .buttonStyle(IconControlStyle()).help("Settings")
+                .accessibilityLabel("Open settings")
         }
         .padding(.horizontal, 20).padding(.top, 16).padding(.bottom, 14)
     }
@@ -102,7 +102,7 @@ struct HistoryView: View {
     private var searchField: some View {
         HStack(spacing: 9) {
             Image(systemName: "magnifyingglass").font(.system(size: 15)).foregroundStyle(.secondary)
-            TextField("Verlauf durchsuchen …", text: $model.search)
+            TextField("Search history…", text: $model.search)
                 .textFieldStyle(.plain).font(.system(size: 14))
                 .focused($searchFocused)
                 .onAppear { searchFocused = true }
@@ -117,7 +117,7 @@ struct HistoryView: View {
             if !model.search.isEmpty {
                 Button { model.search = "" } label: { Image(systemName: "xmark.circle.fill") }
                     .buttonStyle(.plain).foregroundStyle(.secondary)
-                    .accessibilityLabel("Suche leeren")
+                    .accessibilityLabel("Clear search")
             } else if let shortcut = model.shortcut {
                 KeyboardHint(text: shortcut.display)
             }
@@ -133,7 +133,7 @@ struct HistoryView: View {
     private var filters: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 5) {
-                filterButton("Alle", symbol: "square.stack", kind: nil)
+                filterButton("All", symbol: "square.stack", kind: nil)
                 ForEach(ClipKind.allCases) { kind in
                     filterButton(kind.label, symbol: kind.symbol, kind: kind)
                 }
@@ -183,30 +183,30 @@ struct HistoryView: View {
         let message: String
         let symbol: String
         if searching {
-            title = "Keine passenden Einträge"
-            message = "Versuche einen anderen Suchbegriff oder setze die Filter zurück."
+            title = "No matching entries"
+            message = "Try another search term or reset the filters."
             symbol = "magnifyingglass"
         } else {
             switch state {
             case .unavailable:
-                title = "Verlauf noch nicht verfügbar"
-                message = "Prüfe, ob macOS auf deine Schlüsselbund-Freigabe wartet."
+                title = "History is not available yet"
+                message = "Check whether macOS is waiting for Keychain approval."
                 symbol = "lock"
             case .setup:
-                title = "Deine Zwischenablage, griffbereit"
-                message = "Richte SmartClip ein und aktiviere die Aufzeichnung."
+                title = "Your clipboard, within reach"
+                message = "Set up SmartClip and enable capture."
                 symbol = "doc.on.clipboard"
             case .paused:
-                title = "Aufzeichnung pausiert"
-                message = "Setze die Aufzeichnung fort, um neue Kopien zu speichern."
+                title = "Capture paused"
+                message = "Resume capture to store new copies."
                 symbol = "pause"
             case .denied:
-                title = "Zugriff auf die Zwischenablage gesperrt"
-                message = "Erlaube SmartClip den Zugriff in den macOS-Systemeinstellungen."
+                title = "Clipboard access is blocked"
+                message = "Allow SmartClip access in macOS System Settings."
                 symbol = "hand.raised"
             case .active:
-                title = "Platz für deine nächsten Ideen"
-                message = "Kopiere einen Text, ein Bild oder eine Datei.\nSmartClip hält es hier für dich bereit."
+                title = "Room for your next ideas"
+                message = "Copy text, an image, or a file.\nSmartClip keeps it ready for you here."
                 symbol = "doc.on.clipboard"
             }
         }
@@ -220,16 +220,16 @@ struct HistoryView: View {
             Text(message).font(.system(size: 12)).foregroundStyle(.secondary)
                 .multilineTextAlignment(.center).lineSpacing(3)
             if searching {
-                Button("Suche und Filter zurücksetzen") { selectedID = nil; model.resetSearch(); searchFocused = true }
+                Button("Reset search and filters") { selectedID = nil; model.resetSearch(); searchFocused = true }
                     .buttonStyle(.bordered).padding(.top, 4)
             } else if state == .paused {
-                Button("Aufzeichnung fortsetzen") { model.setPaused(false) }
+                Button("Resume capture") { model.setPaused(false) }
                     .buttonStyle(.bordered).padding(.top, 4)
             } else if state == .setup {
-                Button("SmartClip einrichten") { model.onOpenSettings?() }
+                Button("Set up SmartClip") { model.onOpenSettings?() }
                     .buttonStyle(.bordered).padding(.top, 4)
             } else if state == .denied || state == .unavailable, model.recoveryAction != nil {
-                Button(model.recoveryAction?.title ?? "Problem beheben") { model.performRecovery() }
+                Button(model.recoveryAction?.title ?? "Resolve issue") { model.performRecovery() }
                     .buttonStyle(.bordered).padding(.top, 4)
             }
         }
@@ -258,33 +258,33 @@ struct HistoryView: View {
                     .font(.system(size: 11)).foregroundStyle(.secondary)
                 Menu {
                     if model.isPaused {
-                        Button("Aufzeichnung fortsetzen", systemImage: "play.fill") { model.setPaused(false) }
+                        Button("Resume capture", systemImage: "play.fill") { model.setPaused(false) }
                         Divider()
                     }
-                    Button("15 Minuten pausieren", systemImage: "timer") { model.pause(for: 15 * 60) }
-                    Button("Bis zum Neustart pausieren", systemImage: "power") { model.pauseUntilRestart() }
-                    Button("Unbegrenzt pausieren", systemImage: "pause.fill") { model.setPaused(true) }
+                    Button("Pause for 15 minutes", systemImage: "timer") { model.pause(for: 15 * 60) }
+                    Button("Pause until next launch", systemImage: "power") { model.pauseUntilRestart() }
+                    Button("Pause indefinitely", systemImage: "pause.fill") { model.setPaused(true) }
                 } label: {
                     Image(systemName: model.isPaused ? "play.fill" : "pause.fill")
                         .font(.system(size: 11)).frame(width: 24, height: 24)
                 }
                 .menuStyle(.borderlessButton).menuIndicator(.hidden).foregroundStyle(.secondary)
-                .help("Aufzeichnung steuern")
-                .accessibilityLabel("Aufzeichnung steuern")
+                .help("Control capture")
+                .accessibilityLabel("Control capture")
                 .disabled(!model.onboardingComplete || !model.storageReady)
                 Spacer()
                 KeyboardHint(text: "↑ ↓")
-                Text("Auswählen").font(.system(size: 10)).foregroundStyle(.secondary)
+                Text("Select").font(.system(size: 10)).foregroundStyle(.secondary)
                 KeyboardHint(text: "↵")
-                Text(selectedItem == nil && !model.search.isEmpty ? "Suchen" : model.autoPaste ? "Einfügen" : "Kopieren")
+                Text(selectedItem == nil && !model.search.isEmpty ? "Search" : model.autoPaste ? "Paste" : "Copy")
                     .font(.system(size: 10)).foregroundStyle(.secondary)
                 Menu {
-                    Button("Einstellungen") { model.onOpenSettings?() }
+                    Button("Settings") { model.onOpenSettings?() }
                     Divider()
-                    Button("SmartClip beenden") { NSApp.terminate(nil) }
+                    Button("Quit SmartClip") { NSApp.terminate(nil) }
                 } label: { Image(systemName: "ellipsis") }
                 .menuStyle(.borderlessButton).menuIndicator(.hidden).frame(width: 24)
-                .help("Weitere Optionen").accessibilityLabel("Weitere Optionen")
+                .help("More options").accessibilityLabel("More options")
             }
             .padding(.horizontal, 20).frame(height: 42)
         }
@@ -333,14 +333,14 @@ private struct ClipRow: View {
                                 .lineLimit(1)
                         }
                         if item.isSensitive {
-                            Text("Sensibler Inhalt").font(.system(size: 13, weight: .medium))
+                            Text("Sensitive content").font(.system(size: 13, weight: .medium))
                             Text("••••••••••••").font(.system(size: 12, design: .monospaced)).foregroundStyle(.secondary)
                         } else {
                             if item.kind == .code {
-                                Text(item.codeLanguage ?? "Sprache unklar")
+                                Text(item.codeLanguage ?? "Unknown language")
                                     .font(.system(size: 10, weight: .semibold))
                                     .foregroundStyle(ClipKind.code.color)
-                                    .help("Sprache automatisch anhand der Syntax geschätzt")
+                                    .help("Language estimated automatically from syntax")
                             }
                             Text(item.preview.isEmpty ? item.kind.label : item.preview)
                                 .font(.system(size: 13, weight: .medium, design: item.kind == .code ? .monospaced : .default))
@@ -352,12 +352,12 @@ private struct ClipRow: View {
                         }
                         HStack(spacing: 5) {
                             SourceAppIcon(bundleID: item.sourceBundleID, size: 13)
-                            Text(item.sourceName ?? "Unbekannte App").help("Quell-App zum Kopierzeitpunkt geschätzt")
+                            Text(item.sourceName ?? "Unknown app").help("Source app estimated at copy time")
                             Text("·").foregroundStyle(.tertiary)
                             Text(item.lastCopiedAt, style: .relative)
                             if item.hasMissingFiles {
                                 Image(systemName: "exclamationmark.triangle").foregroundStyle(.orange)
-                                    .help("Originaldatei fehlt")
+                                    .help("Original file is missing")
                             }
                         }
                         .font(.system(size: 10)).foregroundStyle(.secondary).lineLimit(1)
@@ -370,7 +370,7 @@ private struct ClipRow: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(ResponsiveButtonStyle())
-            .accessibilityLabel("\(item.favoriteName.map { "\($0), " } ?? "")\(item.kind.label): \(item.isSensitive ? "sensibler Eintrag" : item.preview)")
+            .accessibilityLabel("\(item.favoriteName.map { "\($0), " } ?? "")\(item.kind.label): \(item.isSensitive ? "sensitive entry" : item.preview)")
             .accessibilityAddTraits(selected ? .isSelected : [])
             VStack(alignment: .trailing, spacing: 7) {
                 HStack(spacing: 2) {
@@ -381,8 +381,8 @@ private struct ClipRow: View {
                     .buttonStyle(IconControlStyle())
                     .foregroundStyle(item.isPinned ? ClipTheme.accent : Color.secondary)
                     .opacity(item.isPinned || hovered || selected ? 1 : 0.65)
-                    .help(item.isPinned ? "Lösen" : "Anheften")
-                    .accessibilityLabel(item.isPinned ? "Eintrag lösen" : "Eintrag anheften")
+                    .help(item.isPinned ? "Unpin" : "Pin")
+                    .accessibilityLabel(item.isPinned ? "Unpin entry" : "Pin entry")
                     actions
                 }
                 if item.copyCount > 1 {
@@ -399,75 +399,75 @@ private struct ClipRow: View {
             .strokeBorder(selected ? ClipTheme.accent.opacity(0.34) : card ? ClipTheme.line : .clear))
         .shadow(color: card ? .black.opacity(0.035) : .clear, radius: 5, y: 2)
         .onHover { hovered = $0 }
-        .confirmationDialog("Länger speichern?", isPresented: $confirmUnmark) {
-            Button("Als normal einstufen") { model.markSensitive(item, false) }
+        .confirmationDialog("Keep longer?", isPresented: $confirmUnmark) {
+            Button("Mark as regular") { model.markSensitive(item, false) }
         } message: {
-            Text("Dieser Eintrag erhält dann die normale Aufbewahrungsfrist. Ein angehefteter Eintrag bleibt bis zum manuellen Löschen gespeichert.")
+            Text("This entry will then use the regular retention period. A pinned entry remains until you delete it manually.")
         }
-        .confirmationDialog("App künftig ausschließen?", isPresented: $confirmExclude) {
-            Button("\(item.sourceName ?? "Diese App") ausschließen", role: .destructive) {
+        .confirmationDialog("Exclude this app in the future?", isPresented: $confirmExclude) {
+            Button("Exclude \(item.sourceName ?? "this app")", role: .destructive) {
                 model.excludeSourceApp(of: item)
             }
         } message: {
-            Text("Neue Kopien aus dieser App werden nicht mehr gespeichert. Vorhandene Einträge bleiben erhalten.")
+            Text("New copies from this app will no longer be stored. Existing entries remain.")
         }
-        .alert(item.favoriteName == nil ? "Favorit benennen" : "Favoritenname ändern",
+        .alert(item.favoriteName == nil ? "Name favorite" : "Rename favorite",
                isPresented: $editFavoriteName) {
             TextField("Name", text: $favoriteDraft)
-            Button("Speichern") { model.nameFavorite(item, favoriteDraft) }
-            Button("Abbrechen", role: .cancel) {}
+            Button("Save") { model.nameFavorite(item, favoriteDraft) }
+            Button("Cancel", role: .cancel) {}
         } message: {
-            Text("Der Name wird verschlüsselt gespeichert und ist über die Suche auffindbar.")
+            Text("The name is stored encrypted and can be found through search.")
         }
     }
 
     private var actions: some View {
         Menu {
-            Button("Kopieren", systemImage: "doc.on.doc") { model.copy(item) }
-            if item.kind == .url { Button("URL öffnen", systemImage: "arrow.up.right") { model.openURL(item) } }
-            Button(item.isPinned ? "Lösen" : "Anheften", systemImage: "pin") { model.pin(item) }
-            Button(item.favoriteName == nil ? "Favorit benennen …" : "Favoritenname ändern …",
+            Button("Copy", systemImage: "doc.on.doc") { model.copy(item) }
+            if item.kind == .url { Button("Open URL", systemImage: "arrow.up.right") { model.openURL(item) } }
+            Button(item.isPinned ? "Unpin" : "Pin", systemImage: "pin") { model.pin(item) }
+            Button(item.favoriteName == nil ? "Name favorite …" : "Rename favorite …",
                    systemImage: "tag") {
                 favoriteDraft = item.favoriteName ?? ""
                 editFavoriteName = true
             }
             if item.favoriteName != nil {
-                Button("Favoritenname entfernen", systemImage: "tag.slash") { model.nameFavorite(item, "") }
+                Button("Remove favorite name", systemImage: "tag.slash") { model.nameFavorite(item, "") }
             }
-            Button(item.isSensitive ? "Als normal einstufen" : "Als sensibel einstufen", systemImage: "lock") {
+            Button(item.isSensitive ? "Mark as regular" : "Mark as sensitive", systemImage: "lock") {
                 if item.isSensitive { confirmUnmark = true }
                 else { model.markSensitive(item, true) }
             }
             retentionMenu
             if item.sourceBundleID != nil {
                 Divider()
-                Button("\(item.sourceName ?? "Quell-App") künftig ausschließen", systemImage: "app.badge") {
+                Button("Exclude \(item.sourceName ?? "source app") in the future", systemImage: "app.badge") {
                     confirmExclude = true
                 }
             }
             Divider()
-            Button("Löschen", systemImage: "trash", role: .destructive) { model.delete(item) }
+            Button("Delete", systemImage: "trash", role: .destructive) { model.delete(item) }
         } label: { Image(systemName: "ellipsis").font(.system(size: 12)) }
             .menuStyle(.borderlessButton).menuIndicator(.hidden).frame(width: 22, height: 24)
-            .help("Eintragsaktionen").accessibilityLabel("Eintragsaktionen")
+            .help("Entry actions").accessibilityLabel("Entry actions")
     }
 
     private var retentionMenu: some View {
-        Menu("Löschfrist", systemImage: "clock") {
-            retentionChoice("Globale Einstellung", seconds: nil)
+        Menu("Retention", systemImage: "clock") {
+            retentionChoice("Global setting", seconds: nil)
             Divider()
             if item.isSensitive {
-                retentionChoice("5 Minuten", seconds: 300)
-                retentionChoice("1 Stunde", seconds: 3_600)
-                retentionChoice("24 Stunden", seconds: 86_400)
+                retentionChoice("5 minutes", seconds: 300)
+                retentionChoice("1 hour", seconds: 3_600)
+                retentionChoice("24 hours", seconds: 86_400)
                 Divider()
-                Text("Für „Niemals“ zuerst als normal einstufen")
+                Text("Mark as regular before choosing “Never”")
             } else {
-                retentionChoice("7 Tage", seconds: 7 * 86_400)
-                retentionChoice("30 Tage", seconds: 30 * 86_400)
-                retentionChoice("90 Tage", seconds: 90 * 86_400)
-                retentionChoice("1 Jahr", seconds: 365 * 86_400)
-                retentionChoice("Niemals", seconds: 0)
+                retentionChoice("7 days", seconds: 7 * 86_400)
+                retentionChoice("30 days", seconds: 30 * 86_400)
+                retentionChoice("90 days", seconds: 90 * 86_400)
+                retentionChoice("1 year", seconds: 365 * 86_400)
+                retentionChoice("Never", seconds: 0)
             }
         }
     }
@@ -488,14 +488,14 @@ private struct ClipRow: View {
         if let deletionDate = item.deletionDate(normalDays: model.normalDays == 0 ? nil : model.normalDays,
                                                 sensitiveSeconds: TimeInterval(model.sensitiveSeconds)) {
             Label {
-                Text("Löschen: \(deletionDate.formatted(date: .abbreviated, time: .shortened))")
+                Text("Delete: \(deletionDate.formatted(date: .abbreviated, time: .shortened))")
             } icon: {
                 Image(systemName: "clock")
             }
-            .help("Geplante Löschung: \(deletionDate.formatted(date: .long, time: .shortened))")
+            .help("Scheduled deletion: \(deletionDate.formatted(date: .long, time: .shortened))")
             .font(.system(size: 10)).foregroundStyle(.secondary)
         } else {
-            Label("Keine automatische Löschung", systemImage: "infinity")
+            Label("No automatic deletion", systemImage: "infinity")
                 .font(.system(size: 10)).foregroundStyle(.secondary)
         }
     }

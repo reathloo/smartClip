@@ -26,7 +26,7 @@ zsh scripts/run-dev.sh --ui     # isolated UI preview with sample data
 zsh scripts/run-dev.sh --check  # run all checks, then restart the app
 ```
 
-Use `--ui` for visual changes because it avoids clipboard, Keychain, hotkey, and login-item side effects. Use the real app for integration checks. The isolated suite currently contains **113 automated checks**. See the [test report](docs/TESTBERICHT.md) for coverage and remaining system tests.
+Use `--ui` for visual changes because it avoids clipboard, Keychain, hotkey, and login-item side effects. Use the real app for integration checks. The isolated suite currently contains **113 automated checks**. See the [test report](docs/TEST_REPORT.md) for coverage and remaining system tests.
 
 ## Release build
 

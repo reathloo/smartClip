@@ -65,7 +65,7 @@ private func smartClipHotkeyHandler(_ next: EventHandlerCallRef?, _ event: Event
 final class ShortcutRecorderView: NSView {
     var onShortcut: ((Shortcut) -> Void)?
     private var recording = false
-    private let label = NSTextField(labelWithString: "Eigenes Kürzel aufnehmen")
+    private let label = NSTextField(labelWithString: "Record custom shortcut")
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -84,7 +84,7 @@ final class ShortcutRecorderView: NSView {
             label.leadingAnchor.constraint(greaterThanOrEqualTo: leadingAnchor, constant: 10)
         ])
         setAccessibilityRole(.button)
-        setAccessibilityLabel("Eigenes Tastenkürzel aufnehmen")
+        setAccessibilityLabel("Eigenes Keyboard shortcut aufnehmen")
     }
     override var wantsUpdateLayer: Bool { true }
     override func updateLayer() {
@@ -102,14 +102,14 @@ final class ShortcutRecorderView: NSView {
     override func mouseDown(with event: NSEvent) {
         window?.makeFirstResponder(self)
         recording = true
-        label.stringValue = "Kürzel drücken …"
+        label.stringValue = "Press shortcut…"
         needsDisplay = true
     }
     override func keyDown(with event: NSEvent) {
         guard recording else { return }
         if event.keyCode == UInt16(kVK_Escape) {
             recording = false
-            label.stringValue = "Eigenes Kürzel aufnehmen"
+            label.stringValue = "Record custom shortcut"
             needsDisplay = true
             return
         }
@@ -121,7 +121,7 @@ final class ShortcutRecorderView: NSView {
         if flags.contains(.control) { modifiers |= UInt32(controlKey) }
         guard flags.contains(.command) || flags.contains(.control) || flags.contains(.option),
               let key = event.charactersIgnoringModifiers?.uppercased(), key.count == 1 else {
-            label.stringValue = "⌘, ⌃ oder ⌥ plus Taste wählen"
+            label.stringValue = "Choose ⌘, ⌃, or ⌥ plus a key"
             return
         }
         let display = "\(flags.contains(.control) ? "⌃" : "")\(flags.contains(.option) ? "⌥" : "")\(flags.contains(.shift) ? "⇧" : "")\(flags.contains(.command) ? "⌘" : "")\(key)"

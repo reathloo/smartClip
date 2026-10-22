@@ -9,9 +9,9 @@ enum ClipKind: String, Codable, CaseIterable, Identifiable {
         case .text: "Text"
         case .code: "Code"
         case .url: "URL"
-        case .email: "E-Mail"
-        case .image: "Bild"
-        case .files: "Dateien"
+        case .email: "Email"
+        case .image: "Image"
+        case .files: "Files"
         }
     }
     var symbol: String {
@@ -58,7 +58,7 @@ struct ClipPayload: Codable, Equatable {
     var preview: String {
         switch kind {
         case .text, .code, .url, .email: text ?? ""
-        case .image: "Bild"
+        case .image: "Image"
         case .files: filePaths?.map { URL(fileURLWithPath: $0).lastPathComponent }.joined(separator: ", ") ?? ""
         }
     }

@@ -1,30 +1,30 @@
-# Release-Ablauf
+# Release Process
 
-SmartClip wird derzeit kostenlos ohne Apple Developer ID und ohne Notarisierung verteilt.
+SmartClip is currently distributed for free without an Apple Developer ID or notarization.
 
-## Paket erzeugen
+## Create the package
 
 ```sh
 zsh scripts/package-release.sh v0.1.0-beta.1
 ```
 
-Das Skript führt die 113 Kernprüfungen aus, erstellt die Produktions-App, baut ein DMG und prüft Prüfsumme, Inhalt, Architektur, Mindestversion und die erwartete Gatekeeper-Ablehnung. Die Dateien landen unter `dist/release/`.
+The script runs all 113 core checks, creates the production app and DMG, then verifies the checksum, contents, architecture, minimum macOS version, and expected Gatekeeper rejection. Output is written to `dist/release/`.
 
-## Vor Veröffentlichung
+## Before publishing
 
-- Offene Systemtests aus [TESTBERICHT.md](TESTBERICHT.md) auf einem echten Mac durchführen.
-- Sicherstellen, dass der Git-Arbeitsbaum sauber ist und das Paket zum Release-Commit gehört.
-- Release-Notizen und Versionsnummer prüfen.
-- DMG auf einem separaten Benutzerkonto nach [INSTALLATION.md](INSTALLATION.md) installieren.
+- Complete the open system checks in [TEST_REPORT.md](TEST_REPORT.md) on a physical Mac.
+- Confirm that the Git working tree is clean and the package matches the release commit.
+- Review the release notes and version number.
+- Install the DMG in a separate user account by following [INSTALLATION.md](INSTALLATION.md).
 
 ## GitHub Release
 
-1. Tag `v0.1.0-beta.1` am geprüften Commit erstellen.
-2. GitHub Release mit Titel **SmartClip v0.1.0-beta.1** als **Pre-release** anlegen.
-3. Diese Dateien hochladen:
+1. Create tag `v0.1.0-beta.1` on the verified commit.
+2. Create a GitHub Release named **SmartClip v0.1.0-beta.1** and mark it as a **pre-release**.
+3. Upload:
    - `SmartClip-0.1.0-beta.1-macOS-arm64.dmg`
    - `SmartClip-0.1.0-beta.1-macOS-arm64.dmg.sha256`
    - `SmartClip-0.1.0-beta.1-macOS-arm64.txt`
-4. Inhalt aus [releases/v0.1.0-beta.1.md](releases/v0.1.0-beta.1.md) als Beschreibung verwenden.
+4. Use [releases/v0.1.0-beta.1.md](releases/v0.1.0-beta.1.md) as the description.
 
-Bei einem privaten Repository können nur berechtigte GitHub-Nutzer das Release herunterladen.
+Only authorized GitHub users can download a release from a private repository.

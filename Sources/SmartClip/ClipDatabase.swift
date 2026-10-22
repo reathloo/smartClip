@@ -8,7 +8,7 @@ enum DatabaseError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .sqlite(let detail): "Datenbankfehler: \(detail)"
-        case .invalidRecord: "Ein Verlaufseintrag ist beschädigt."
+        case .invalidRecord: "A history entry is corrupted."
         }
     }
 }
@@ -24,7 +24,7 @@ final class ClipDatabase {
         let parent = URL(fileURLWithPath: path).deletingLastPathComponent()
         try FileManager.default.createDirectory(at: parent, withIntermediateDirectories: true)
         guard sqlite3_open_v2(path, &db, SQLITE_OPEN_CREATE | SQLITE_OPEN_READWRITE | SQLITE_OPEN_FULLMUTEX, nil) == SQLITE_OK else {
-            throw DatabaseError.sqlite("Datenbank konnte nicht geöffnet werden")
+            throw DatabaseError.sqlite("Could not open database")
         }
         try execute("PRAGMA journal_mode=WAL")
         try execute("PRAGMA secure_delete=ON")
@@ -162,7 +162,7 @@ final class ClipDatabase {
             } else {
                 favoriteName = nil
             }
-            var preview = sensitive ? "••••••••" : rowKind == .image ? "Bild" : ""
+            var preview = sensitive ? "••••••••" : rowKind == .image ? "Image" : ""
             var missing = false
             let sourceMatches = sourceName?.localizedCaseInsensitiveContains(needle) == true
             if rowKind != .image, let sealed = columnData(stmt, 8) {

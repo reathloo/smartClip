@@ -11,10 +11,10 @@ func renderDesignPreviews() async throws {
     let model = AppModel.designPreview()
     let samples: [(ClipKind, String, String, String, Bool, Bool)] = [
         (.url, "https://developer.apple.com/design/", "Safari", "com.apple.Safari", true, false),
-        (.code, "def greet(name):\n    return f\"Hallo {name}\"", "Visual Studio Code", "com.microsoft.VSCode", true, false),
-        (.text, "Die besten Werkzeuge machen den nächsten Schritt ein bisschen einfacher.", "Notizen", "com.apple.Notes", false, false),
-        (.email, "hallo@example.com", "Mail", "com.apple.mail", false, false),
-        (.files, "Projektentwurf.pdf, Notizen.md", "Finder", "com.apple.finder", false, false),
+        (.code, "def greet(name):\n    return f\"Hello {name}\"", "Visual Studio Code", "com.microsoft.VSCode", true, false),
+        (.text, "The best tools make the next step a little easier.", "Notes", "com.apple.Notes", false, false),
+        (.email, "hello@example.com", "Mail", "com.apple.mail", false, false),
+        (.files, "Project-draft.pdf, Notes.md", "Finder", "com.apple.finder", false, false),
         (.text, "••••••••", "Safari", "com.apple.Safari", false, true)
     ]
     model.items = samples.enumerated().map { index, item in
@@ -65,7 +65,7 @@ func renderDesignPreviews() async throws {
     model.items = []
     try await snapshot(HistoryView(model: model), size: NSSize(width: 600, height: 680),
                        scheme: .light, to: output.appendingPathComponent("empty-light.png"))
-    model.search = "kein Treffer"
+    model.search = "no result"
     try await snapshot(HistoryView(model: model), size: NSSize(width: 560, height: 540),
                        scheme: .light, to: output.appendingPathComponent("search-empty-compact.png"))
     model.search = ""
@@ -81,7 +81,7 @@ private func snapshot<V: View>(_ view: V, size: NSSize, scheme: ColorScheme, to 
                           styleMask: [.borderless], backing: .buffered, defer: false)
     window.isReleasedWhenClosed = false
     window.appearance = NSAppearance(named: scheme == .dark ? .darkAqua : .aqua)
-    let host = NSHostingView(rootView: view.environment(\.colorScheme, scheme).environment(\.locale, Locale(identifier: "de_DE")))
+    let host = NSHostingView(rootView: view.environment(\.colorScheme, scheme).environment(\.locale, Locale(identifier: "en_US")))
     host.frame = NSRect(origin: .zero, size: size)
     window.contentView = host
     host.layoutSubtreeIfNeeded()
