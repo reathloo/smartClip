@@ -7,11 +7,11 @@
 
 ## Installation
 
-1. Download `SmartClip-0.1.0-beta.1-macOS-arm64.dmg`.
+1. Download `SmartClip-0.1.0-beta.2-macOS-arm64.dmg`.
 2. Optionally verify the checksum in Terminal:
 
    ```sh
-   shasum -a 256 -c SmartClip-0.1.0-beta.1-macOS-arm64.dmg.sha256
+   shasum -a 256 -c SmartClip-0.1.0-beta.2-macOS-arm64.dmg.sha256
    ```
 
 3. Open the DMG and drag **SmartClip.app** to **Applications**.

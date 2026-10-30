@@ -4,7 +4,7 @@ set -euo pipefail
 root="${0:A:h:h}"
 cd "$root"
 
-release_tag="${1:-v0.1.0-beta.1}"
+release_tag="${1:-v0.1.0-beta.2}"
 if [[ ! "$release_tag" =~ '^v[0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9.-]+)?$' ]]; then
   print -u2 "Invalid version: $release_tag (expected, for example, v0.1.0-beta.1)"
   exit 1
