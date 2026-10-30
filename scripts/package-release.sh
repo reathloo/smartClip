@@ -48,21 +48,7 @@ rm -rf "$release_dir"
 mkdir -p "$release_dir" "$stage/SmartClip"
 /usr/bin/ditto --noqtn "$app" "$stage/SmartClip/SmartClip.app"
 /bin/ln -s /Applications "$stage/SmartClip/Applications"
-/bin/cat > "$stage/SmartClip/Installation Instructions.txt" <<'EOF'
-INSTALL SMARTCLIP
-
-1. Drag SmartClip.app to Applications.
-2. Open SmartClip once from Applications.
-3. After the macOS warning, open System Settings > Privacy & Security.
-4. Choose Open Anyway for SmartClip, then choose Open.
-
-SmartClip is not signed with an Apple Developer ID and is not notarized.
-Download the package only from the official SmartClip release.
-EOF
-
-/usr/bin/hdiutil create -quiet -ov -format UDZO -volname "SmartClip" \
-  -srcfolder "$stage/SmartClip" "$dmg"
-/usr/bin/hdiutil verify "$dmg" >/dev/null
+zsh scripts/create-dmg.sh "$stage/SmartClip" "$dmg" "$release_version"
 
 (
   cd "$release_dir"

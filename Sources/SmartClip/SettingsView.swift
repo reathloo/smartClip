@@ -29,6 +29,7 @@ struct SettingsView: View {
     @State private var tab: SettingsTab
     @State private var newExcludedBundle = ""
     @State private var confirmDeleteAll = false
+    @AppStorage("SUAutomaticallyUpdate") private var automaticallyInstallUpdates = true
 
     init(model: AppModel, initialTab: SettingsTab = .general) {
         self.model = model
@@ -171,6 +172,9 @@ struct SettingsView: View {
                 Divider().overlay(ClipTheme.line)
                 settingToggle("Launch at login", detail: "SmartClip waits in your menu bar.",
                               value: Binding(get: { model.autoStartEnabled }, set: { model.setAutoStart($0) }))
+                Divider().overlay(ClipTheme.line)
+                settingToggle("Install updates automatically", detail: "Downloads trusted SmartClip releases and installs them when the app restarts.",
+                              value: $automaticallyInstallUpdates)
             }
             if model.onboardingComplete {
                 SettingsCard("Capture", symbol: "record.circle") {
@@ -321,8 +325,19 @@ struct SettingsView: View {
             }
 
             SettingsCard("Links", symbol: "link") {
-                aboutLink("New versions", detail: "Open GitHub Releases.", symbol: "arrow.down.circle",
-                          url: "https://github.com/reathloo/smartClip/releases")
+                Button { model.onCheckForUpdates?() } label: {
+                    HStack(spacing: 12) {
+                        Image(systemName: "arrow.triangle.2.circlepath").foregroundStyle(ClipTheme.accent).frame(width: 18)
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text("Check for updates").font(.system(size: 12, weight: .medium)).foregroundStyle(.primary)
+                            Text("Look for a newer signed SmartClip release.").font(.system(size: 11)).foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(ResponsiveButtonStyle()).accessibilityLabel("Check for updates")
+                .padding(.vertical, 2)
                 Divider()
                 aboutLink("Installation", detail: "Instructions for the unsigned beta.", symbol: "questionmark.circle",
                           url: "https://github.com/reathloo/smartClip/blob/main/docs/INSTALLATION.md")

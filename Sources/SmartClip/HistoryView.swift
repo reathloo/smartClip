@@ -7,9 +7,10 @@ struct HistoryView: View {
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @FocusState private var searchFocused: Bool
     @State private var selectedID: UUID?
+    @State private var searchText = ""
 
     private var selectedItem: ClipSummary? {
-        guard let id = HistoryNavigation.selected(in: model.items.map(\.id), explicit: selectedID, search: model.search) else { return nil }
+        guard let id = HistoryNavigation.selected(in: model.items.map(\.id), explicit: selectedID, search: searchText) else { return nil }
         return model.item(for: id)
     }
 
@@ -41,6 +42,10 @@ struct HistoryView: View {
         .environment(\.locale, Locale(identifier: "en_US"))
         .onChange(of: model.items.map(\.id)) { _, ids in
             if let selectedID, !ids.contains(selectedID) { self.selectedID = nil }
+        }
+        .onAppear {
+            searchText = model.search
+            searchFocused = false
         }
         .animation(reduceMotion ? nil : .spring(response: 0.34, dampingFraction: 1), value: model.cardView)
         .animation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 1), value: model.filter)
@@ -103,20 +108,25 @@ struct HistoryView: View {
     private var searchField: some View {
         HStack(spacing: 9) {
             Image(systemName: "magnifyingglass").font(.system(size: 15)).foregroundStyle(.secondary)
-            TextField("Search history…", text: $model.search)
+            TextField("Search history…", text: $searchText)
                 .textFieldStyle(.plain).font(.system(size: 14))
                 .focused($searchFocused)
-                .onAppear { searchFocused = true }
-                .onChange(of: model.search) { _, _ in selectedID = nil; model.scheduleSearch() }
+                .onChange(of: searchText) { _, query in
+                    selectedID = nil
+                    model.scheduleSearch(query)
+                }
+                .onChange(of: model.search) { _, query in
+                    if searchText != query { searchText = query }
+                }
                 .onKeyPress(.downArrow) { moveSelection(1); return .handled }
                 .onKeyPress(.upArrow) { moveSelection(-1); return .handled }
                 .onKeyPress(.return) {
-                    model.applySearchImmediately()
+                    model.applySearchImmediately(searchText)
                     if let selectedItem { model.copy(selectedItem) }
                     return .handled
                 }
-            if !model.search.isEmpty {
-                Button { model.search = "" } label: { Image(systemName: "xmark.circle.fill") }
+            if !searchText.isEmpty {
+                Button { searchText = "" } label: { Image(systemName: "xmark.circle.fill") }
                     .buttonStyle(.plain).foregroundStyle(.secondary)
                     .accessibilityLabel("Clear search")
             } else if let shortcut = model.shortcut {
@@ -178,7 +188,7 @@ struct HistoryView: View {
     }
 
     private var emptyState: some View {
-        let searching = !model.search.isEmpty || model.filter != nil
+        let searching = !searchText.isEmpty || model.filter != nil
         let state = model.captureState
         let title: String
         let message: String
@@ -221,7 +231,11 @@ struct HistoryView: View {
             Text(message).font(.system(size: 12)).foregroundStyle(.secondary)
                 .multilineTextAlignment(.center).lineSpacing(3)
             if searching {
-                Button("Reset search and filters") { selectedID = nil; model.resetSearch(); searchFocused = true }
+                Button("Reset search and filters") {
+                    selectedID = nil
+                    searchText = ""
+                    model.resetSearch()
+                }
                     .buttonStyle(.bordered).padding(.top, 4)
             } else if state == .paused {
                 Button("Resume capture") { model.setPaused(false) }
@@ -277,7 +291,7 @@ struct HistoryView: View {
                 KeyboardHint(text: "↑ ↓")
                 Text("Select").font(.system(size: 10)).foregroundStyle(.secondary)
                 KeyboardHint(text: "↵")
-                Text(selectedItem == nil && !model.search.isEmpty ? "Search" : model.autoPaste ? "Paste" : "Copy")
+                Text(selectedItem == nil && !searchText.isEmpty ? "Search" : model.autoPaste ? "Paste" : "Copy")
                     .font(.system(size: 10)).foregroundStyle(.secondary)
                 Menu {
                     Button("Settings") { model.onOpenSettings?() }
@@ -296,14 +310,14 @@ struct HistoryView: View {
 
     private func moveSelection(_ offset: Int) {
         // Resolve the latest query before selecting, even within the debounce interval.
-        model.applySearchImmediately()
+        model.applySearchImmediately(searchText)
         selectedID = HistoryNavigation.moved(in: model.items.map(\.id), explicit: selectedID,
-                                              search: model.search, offset: offset)
+                                              search: searchText, offset: offset)
     }
 }
 
 private struct ClipRow: View {
-    @ObservedObject var model: AppModel
+    let model: AppModel
     let snapshot: ClipSummary
     // Lazy rows may retain their identity when moving between sections. Resolve
     // actions and labels from the current model instead of the old row snapshot.
@@ -503,7 +517,7 @@ private struct ClipRow: View {
 }
 
 private struct ClipImagePreview: View {
-    @ObservedObject var model: AppModel
+    let model: AppModel
     let id: UUID
     @State private var image: NSImage?
 

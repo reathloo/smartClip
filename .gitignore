@@ -30,3 +30,5 @@ xcuserdata/
 *.db
 *.db-*
 *.log
+__pycache__/
+*.pyc

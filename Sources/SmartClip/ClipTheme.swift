@@ -111,12 +111,26 @@ struct SourceAppIcon: View {
     let bundleID: String?
     var size: CGFloat = 14
     var body: some View {
-        if let bundleID, let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) {
-            Image(nsImage: NSWorkspace.shared.icon(forFile: url.path))
+        if let bundleID, let icon = SourceAppIconCache.icon(for: bundleID) {
+            Image(nsImage: icon)
                 .resizable().frame(width: size, height: size).accessibilityHidden(true)
         } else {
             Image(systemName: "app.dashed").font(.system(size: size)).foregroundStyle(.tertiary)
                 .frame(width: size, height: size).accessibilityHidden(true)
         }
+    }
+}
+
+@MainActor
+private enum SourceAppIconCache {
+    private static let images = NSCache<NSString, NSImage>()
+
+    static func icon(for bundleID: String) -> NSImage? {
+        let key = bundleID as NSString
+        if let cached = images.object(forKey: key) { return cached }
+        guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) else { return nil }
+        let image = NSWorkspace.shared.icon(forFile: url.path)
+        images.setObject(image, forKey: key)
+        return image
     }
 }

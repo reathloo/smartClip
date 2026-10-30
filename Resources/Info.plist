@@ -12,4 +12,11 @@
     <key>LSMinimumSystemVersion</key><string>14.0</string>
     <key>LSUIElement</key><true/>
     <key>NSHighResolutionCapable</key><true/>
+    <key>SUFeedURL</key><string>https://reathloo.github.io/smartClip/appcast.xml</string>
+    <key>SUPublicEDKey</key><string>9zCGg/PovlcMLVjKEDACqjXtfvFdLYxgBpfdS8uIEOA=</string>
+    <key>SUEnableAutomaticChecks</key><true/>
+    <key>SUAutomaticallyUpdate</key><true/>
+    <key>SUAllowsAutomaticUpdates</key><true/>
+    <key>SUScheduledCheckInterval</key><integer>3600</integer>
+    <key>SUScheduledImpatientCheckInterval</key><integer>86400</integer>
 </dict></plist>

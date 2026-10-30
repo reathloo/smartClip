@@ -1,5 +1,6 @@
 #if DEBUG
 import AppKit
+import Combine
 import CryptoKit
 import CSQLite
 import Carbon
@@ -695,11 +696,22 @@ func runCoreChecks() async throws {
         f.model.delete(original)
         try expect(f.model.item(for: original.id) == nil, "Deleted row retained by index")
     }
+    integration("model.unchanged-refresh-does-not-republish-history") { f in
+        try f.capture(.text("stable"))
+        var publications = 0
+        let observation = f.model.$items.dropFirst().sink { _ in publications += 1 }
+        f.model.refresh()
+        let publicationsAfterFirstRefresh = publications
+        f.model.refresh()
+        withExtendedLifetime(observation) {}
+        try expect(publicationsAfterFirstRefresh == 1, "Initial history refresh was not published")
+        try expect(publications == publicationsAfterFirstRefresh, "Unchanged history was published again")
+    }
     integration("model.search-flush-before-keyboard-selection") { f in
         try f.capture(.text("first")); try f.capture(.text("second"))
         f.model.refresh()
-        f.model.search = "second"; f.model.scheduleSearch()
-        f.model.applySearchImmediately()
+        f.model.scheduleSearch("first")
+        f.model.applySearchImmediately("second")
         let ids = f.model.items.map(\.id)
         let selected = HistoryNavigation.moved(in: ids, explicit: nil, search: f.model.search, offset: 1)
         try expect(selected != nil && f.model.item(for: selected!)?.preview == "second", "Keyboard used old search results")
@@ -779,6 +791,7 @@ func runCoreChecks() async throws {
         var titles = delegate.makeStatusMenu().items.map(\.title)
         try expect(titles.contains("Pause for 15 minutes") && titles.contains("Pause until next launch"),
                    "Menu-bar pause actions missing")
+        try expect(titles.contains("Check for Updates …"), "Menu-bar update action missing")
         f.model.pauseUntilRestart()
         titles = delegate.makeStatusMenu().items.map(\.title)
         try expect(titles.first == "Resume capture", "Paused menu cannot resume capture")

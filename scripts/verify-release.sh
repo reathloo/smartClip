@@ -38,12 +38,32 @@ app="$mount/SmartClip.app"
   print -u2 "Applications link is missing from the DMG"
   exit 1
 }
+[[ -f "$mount/.background.png" && -f "$mount/.DS_Store" ]] || {
+  print -u2 "Styled DMG background is missing"
+  exit 1
+}
 
 /usr/bin/codesign --verify --deep --strict "$app"
 /usr/bin/plutil -lint "$app/Contents/Info.plist" >/dev/null
 minimum="$(/usr/libexec/PlistBuddy -c 'Print :LSMinimumSystemVersion' "$app/Contents/Info.plist")"
 [[ "$minimum" == "14.0" ]] || { print -u2 "Unexpected minimum version: $minimum"; exit 1; }
 /usr/bin/file "$app/Contents/MacOS/SmartClip" | /usr/bin/grep -q 'arm64'
+[[ -d "$app/Contents/Frameworks/Sparkle.framework" ]] || {
+  print -u2 "Sparkle framework is missing from the app"
+  exit 1
+}
+[[ -f "$app/Contents/Resources/ThirdPartyLicenses/Sparkle.txt" ]] || {
+  print -u2 "Sparkle license is missing from the app"
+  exit 1
+}
+/usr/bin/otool -L "$app/Contents/MacOS/SmartClip" | /usr/bin/grep -q '@rpath/Sparkle.framework'
+feed="$(/usr/libexec/PlistBuddy -c 'Print :SUFeedURL' "$app/Contents/Info.plist")"
+public_key="$(/usr/libexec/PlistBuddy -c 'Print :SUPublicEDKey' "$app/Contents/Info.plist")"
+[[ "$feed" == "https://reathloo.github.io/smartClip/appcast.xml" ]] || {
+  print -u2 "Unexpected Sparkle feed: $feed"
+  exit 1
+}
+[[ -n "$public_key" ]] || { print -u2 "Sparkle public key is missing"; exit 1; }
 
 # Simulate a browser download. Gatekeeper must reject this intentionally
 # unnotarized package; users then allow it explicitly in System Settings.
@@ -55,4 +75,4 @@ if [[ "$assessment" != *"rejected"* ]]; then
   exit 1
 fi
 
-print "Package verification passed: app, DMG, checksum, architecture, and expected Gatekeeper warning."
+print "Package verification passed: app, styled DMG, checksum, architecture, Sparkle, and expected Gatekeeper warning."

@@ -1,5 +1,6 @@
 import AppKit
 import Combine
+import Sparkle
 import SwiftUI
 
 @main
@@ -56,6 +57,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var panel: HistoryPanel?
     private var settingsWindow: NSWindow?
     private var pauseObservation: AnyCancellable?
+    private var updaterController: SPUStandardUpdaterController?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         #if DEBUG
@@ -80,6 +82,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         #else
         Task { await model.start() }
         #endif
+        #if DEBUG
+        let shouldStartUpdater = testSession == nil
+        #else
+        let shouldStartUpdater = true
+        #endif
+        if shouldStartUpdater {
+            let updater = SPUStandardUpdaterController(
+                startingUpdater: true,
+                updaterDelegate: nil,
+                userDriverDelegate: nil
+            )
+            updaterController = updater
+            model.onCheckForUpdates = { [weak updater] in updater?.checkForUpdates(nil) }
+        }
         model.onOpenHistory = { [weak self] in self?.toggleHistory() }
         model.onClosePanel = { [weak self] in self?.panel?.orderOut(nil) }
         model.onOpenSettings = { [weak self] in self?.showSettings() }
@@ -116,6 +132,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(withTitle: "Pause for 15 minutes", action: #selector(pauseFor15Minutes), keyEquivalent: "")
         menu.addItem(withTitle: "Pause until next launch", action: #selector(pauseUntilNextLaunch), keyEquivalent: "")
         menu.addItem(.separator())
+        menu.addItem(withTitle: "Check for Updates …", action: #selector(checkForUpdates), keyEquivalent: "")
         menu.addItem(withTitle: "Settings …", action: #selector(openSettingsFromMenu), keyEquivalent: ",")
         menu.addItem(withTitle: "Quit SmartClip", action: #selector(quitFromMenu), keyEquivalent: "q")
         for item in menu.items { item.target = self }
@@ -131,6 +148,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func resumeCapture() { model.setPaused(false) }
     @objc private func pauseFor15Minutes() { model.pause(for: 15 * 60) }
     @objc private func pauseUntilNextLaunch() { model.pauseUntilRestart() }
+    @objc private func checkForUpdates() { updaterController?.checkForUpdates(nil) }
     @objc private func openSettingsFromMenu() { showSettings() }
     @objc private func quitFromMenu() { NSApp.terminate(nil) }
 

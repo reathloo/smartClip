@@ -95,7 +95,7 @@ struct ClipPayload: Codable, Equatable {
     }
 }
 
-struct ClipSummary: Identifiable {
+struct ClipSummary: Identifiable, Equatable {
     let id: UUID
     let kind: ClipKind
     let lastCopiedAt: Date

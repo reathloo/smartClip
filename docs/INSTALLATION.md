@@ -31,7 +31,9 @@ This confirmation is required because the free beta has no Apple Developer ID an
 
 ## Update
 
-Quit SmartClip, open the new DMG, and replace the existing app in Applications. History and settings are stored outside the app bundle and remain available.
+Release builds check for signed updates once per hour. By default, a trusted update is downloaded in the background and installed when SmartClip restarts. Use **Check for Updates …** in the menu-bar menu or Settings → About SmartClip to check immediately. Automatic installation can be disabled in Settings → General.
+
+You can also update manually: quit SmartClip, open the new DMG, and replace the existing app in Applications. History and settings are stored outside the app bundle and remain available.
 
 ## Uninstall
 

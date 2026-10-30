@@ -8,7 +8,7 @@ import ServiceManagement
 final class AppModel: ObservableObject {
     static let shared = AppModel()
     @Published var items: [ClipSummary] = [] {
-        didSet { itemsByID = Dictionary(items.map { ($0.id, $0) }, uniquingKeysWith: { _, latest in latest }) }
+        didSet { itemsByID = items.reduce(into: [:]) { $0[$1.id] = $1 } }
     }
     private var itemsByID: [UUID: ClipSummary] = [:]
     @Published var search = ""
@@ -53,6 +53,7 @@ final class AppModel: ObservableObject {
     var previousApp: NSRunningApplication?
     var onClosePanel: (() -> Void)?
     var onOpenSettings: (() -> Void)?
+    var onCheckForUpdates: (() -> Void)?
     let hotkey = HotkeyManager()
 
     init(defaults: UserDefaults = .standard, pasteboard: NSPasteboard = .general,
@@ -186,22 +187,29 @@ final class AppModel: ObservableObject {
     }
 
     func refresh() {
-        do { items = try database?.list(search: search, kind: filter) ?? [] }
+        do {
+            let refreshedItems = try database?.list(search: search, kind: filter) ?? []
+            guard refreshedItems != items else { return }
+            items = refreshedItems
+        }
         catch { showStatus(error.localizedDescription) }
     }
 
-    func scheduleSearch() {
+    func scheduleSearch(_ query: String? = nil) {
+        let pendingQuery = query ?? search
         searchTask?.cancel()
         searchTask = Task {
             try? await Task.sleep(for: .milliseconds(150))
             guard !Task.isCancelled else { return }
+            if search != pendingQuery { search = pendingQuery }
             refresh()
         }
     }
 
-    func applySearchImmediately() {
+    func applySearchImmediately(_ query: String? = nil) {
         searchTask?.cancel()
         searchTask = nil
+        if let query, search != query { search = query }
         refresh()
     }
 

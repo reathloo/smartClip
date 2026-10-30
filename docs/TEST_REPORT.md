@@ -1,12 +1,12 @@
 # SmartClip Test Report and Reproducible Verification
 
-Last updated: October 20, 2026.
+Last updated: October 30, 2026.
 
 ## Result
 
-Run the automated suite with `zsh scripts/test.sh`. It contains **113 named checks** with multiple assertions. Machine-readable results are written to `.build/test-results/core.json`; console output is written to `.build/test-results/core.log`.
+Run the automated suite with `zsh scripts/test.sh`. It contains **114 named checks** with multiple assertions. Machine-readable results are written to `.build/test-results/core.json`; console output is written to `.build/test-results/core.log`.
 
-The initial 54-check run reproduced five failures. All five were fixed, and later integration coverage expanded the suite. UI checks are separate and are not counted among the 113 automated checks.
+The initial 54-check run reproduced five failures. All five were fixed, and later integration coverage expanded the suite. UI checks are separate and are not counted among the 114 automated checks.
 
 Tests use random temporary databases, isolated UserDefaults suites, named private pasteboards, and generated keys. They do not read real clipboard history or access the real Keychain. The shortcut check temporarily registers ⌃⌥⇧⌘F18/F19 and releases both combinations afterward. It fails with an explanation if another process already owns either shortcut.
 
@@ -42,6 +42,7 @@ Sensitive values receive a ConcealedType marker when copied. Hotkey handlers and
 | Shortcut | Native registration, conflict, failed replacement, removal, release, callback | Physical global key routing remains manual |
 | Window | Native close and minimize controls, movable and resizable panel, minimum size, reuse | Visibility, dragging, minimizing, and reopening need interactive confirmation |
 | Startup | Key-loading failure, responsive UI during wait, reopening existing history with the same key | Real Keychain ACL and macOS restart remain manual |
+| Updates | Embedded Sparkle framework, signed-feed configuration, menu action, package linkage, and public-key presence | Published feed and end-to-end replacement remain release acceptance checks |
 
 ## Direct UI check with sample data
 
@@ -74,6 +75,7 @@ These require an interactive Mac and the relevant permissions. They are not mark
 - [ ] Enable launch at login, sign out and back in, verify one menu-bar instance, disable it, and repeat.
 - [ ] Measure idle CPU and memory with real capture running, then test a long history and several large images.
 - [ ] Run on macOS 14 to confirm the declared minimum version.
+- [ ] Publish a signed test appcast, update from the previous version, and verify history and settings survive relaunch.
 
 ## Known limits
 
@@ -107,3 +109,4 @@ SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX26.5.sdk swift run SmartC
 - **Per-entry retention, October 12, 2026:** expanded to 112 checks. Regular entries support 7, 30, 90, or 365 days and Never; sensitive entries remain limited to 5 minutes, 1 hour, or 24 hours.
 - **Unsigned release package, October 20, 2026:** package verification checks the read-only DMG, Applications link, minimum version, architecture, ad hoc signature, checksum, and expected Gatekeeper rejection.
 - **Release controls, October 20, 2026:** expanded to 113 checks. Delete all history requires confirmation, removes every entry, and preserves settings and the system clipboard. About SmartClip shows version, requirements, local processing, and documentation links.
+- **History responsiveness, October 30, 2026:** expanded to 114 checks. Unchanged history refreshes no longer publish another list update; search focus and row rendering were checked in the local test app.
