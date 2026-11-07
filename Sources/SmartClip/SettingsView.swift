@@ -29,6 +29,7 @@ struct SettingsView: View {
     @State private var tab: SettingsTab
     @State private var newExcludedBundle = ""
     @State private var confirmDeleteAll = false
+    @State private var confirmDeleteUnpinned = false
     @AppStorage("SUAutomaticallyUpdate") private var automaticallyInstallUpdates = true
 
     init(model: AppModel, initialTab: SettingsTab = .general) {
@@ -85,6 +86,12 @@ struct SettingsView: View {
         } message: {
             Text("All regular, sensitive, and pinned entries will be permanently removed from SmartClip. Settings and the current macOS clipboard remain unchanged.")
         }
+        .alert("Delete history except favorites?", isPresented: $confirmDeleteUnpinned) {
+            Button("Delete unpinned", role: .destructive) { model.deleteUnpinnedHistory() }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("All unpinned entries will be removed. Pinned entries and named favorites remain. Settings and the current macOS clipboard are unchanged.")
+        }
     }
 
     private var sidebar: some View {
@@ -103,6 +110,17 @@ struct SettingsView: View {
                 }
             }
             .padding(.horizontal, 10).padding(.top, 20).padding(.bottom, 27)
+            Button {
+                model.showingSettings = false
+            } label: {
+                Label("Clipboard", systemImage: "square.on.square")
+                    .font(.system(size: 12, weight: .medium))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 11).padding(.vertical, 10)
+            }
+            .buttonStyle(ResponsiveButtonStyle())
+            .accessibilityLabel("Back to clipboard")
+            Divider().padding(.vertical, 7)
             ForEach(SettingsTab.allCases) { item in
                 Button {
                     withAnimation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 1)) { tab = item }
@@ -214,6 +232,39 @@ struct SettingsView: View {
                     .labelsHidden().pickerStyle(.segmented).frame(width: 145)
                 }
             }
+            SettingsCard("Storage", symbol: "internaldrive") {
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        Text(storageUsageLabel).font(.system(size: 12, weight: .medium))
+                        Spacer()
+                        Text("\(model.storageStatistics.itemCount) entries")
+                            .font(.system(size: 10)).foregroundStyle(.secondary)
+                    }
+                    if model.storageLimitBytes > 0 {
+                        ProgressView(value: min(1, Double(model.storageStatistics.contentBytes)
+                                                / Double(max(1, model.storageLimitBytes))))
+                            .tint(model.storageStatistics.contentBytes > model.storageLimitBytes ? .orange : ClipTheme.accent)
+                    }
+                    Text("Disk usage: \(formatBytes(model.storageStatistics.diskBytes)). Pinned entries are never removed automatically.")
+                        .font(.system(size: 11)).foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Divider()
+                settingRow("Storage limit", detail: "Oldest unpinned entries are removed first.") {
+                    Picker("Storage limit", selection: Binding(
+                        get: { model.storageLimitBytes }, set: { model.setStorageLimitBytes($0) })) {
+                        Text("250 MB").tag(Int64(250 * 1_024 * 1_024))
+                        Text("500 MB").tag(Int64(500 * 1_024 * 1_024))
+                        Text("1 GB").tag(Int64(1_024 * 1_024 * 1_024))
+                        Text("Unlimited").tag(Int64(0))
+                    }
+                    .labelsHidden().frame(width: 130)
+                }
+                if model.storageLimitBytes > 0 && model.storageStatistics.contentBytes > model.storageLimitBytes {
+                    Label("Pinned entries currently exceed this limit and were kept.", systemImage: "exclamationmark.triangle")
+                        .font(.system(size: 11)).foregroundStyle(.orange)
+                }
+            }
             SettingsCard("Automatic deletion", symbol: "clock") {
                 settingRow("Regular history", detail: "Time since the most recent copy.") {
                     Picker("Regular history", selection: Binding(get: { model.normalDays }, set: { model.setNormalDays($0) })) {
@@ -236,11 +287,20 @@ struct SettingsView: View {
                 }
             }
             SettingsCard("Manage history", symbol: "trash") {
+                settingRow("Delete history except favorites",
+                           detail: "Removes unpinned entries and keeps pinned items and named favorites.") {
+                    Button("Delete unpinned", role: .destructive) { confirmDeleteUnpinned = true }
+                        .buttonStyle(.bordered).tint(.red)
+                        .disabled(model.isCleaningHistory)
+                }
+                Divider()
                 settingRow("Delete all history",
                            detail: "Removes every entry, including favorites and sensitive content.") {
                     Button("Delete all", role: .destructive) { confirmDeleteAll = true }
                         .buttonStyle(.bordered).tint(.red)
+                        .disabled(model.isCleaningHistory)
                 }
+                if model.isCleaningHistory { ProgressView().controlSize(.small) }
                 Text("The current macOS clipboard and your settings are not changed.")
                     .font(.system(size: 11)).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -265,6 +325,16 @@ struct SettingsView: View {
             }
             .padding(18).frame(maxWidth: .infinity, alignment: .leading)
             .background(ClipTheme.accent.opacity(0.065), in: RoundedRectangle(cornerRadius: 12))
+            SettingsCard("Sensitive content", symbol: "eye.slash") {
+                settingToggle("Store sensitive entries",
+                              detail: "When disabled, password-manager and detected card-number copies are never added to SmartClip.",
+                              value: Binding(get: { model.storeSensitive }, set: { model.setStoreSensitive($0) }))
+                if model.storeSensitive {
+                    Text("Stored sensitive entries remain encrypted, masked, and use the short retention period.")
+                        .font(.system(size: 11)).foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
             SettingsCard("Exclude apps", symbol: "app.badge.checkmark") {
                 Text("Future copies from these apps are ignored. The source app is estimated at capture time.")
                     .font(.system(size: 11)).foregroundStyle(.secondary).lineSpacing(2)
@@ -414,6 +484,16 @@ struct SettingsView: View {
             Text(text).font(.system(size: 11)).lineSpacing(2).fixedSize(horizontal: false, vertical: true)
         }
         .foregroundStyle(.secondary).frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var storageUsageLabel: String {
+        let used = formatBytes(model.storageStatistics.contentBytes)
+        guard model.storageLimitBytes > 0 else { return "\(used) encrypted content" }
+        return "\(used) of \(formatBytes(model.storageLimitBytes))"
+    }
+
+    private func formatBytes(_ bytes: Int64) -> String {
+        ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file)
     }
 }
 

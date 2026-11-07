@@ -13,14 +13,17 @@ enum DatabaseError: LocalizedError {
     }
 }
 
-@MainActor
-final class ClipDatabase {
+/// Synchronous SQLite adapter. `HistoryStore` serializes production access;
+/// SQLite's FULLMUTEX mode also protects the injected adapter used by tests.
+final class ClipDatabase: @unchecked Sendable {
     private var db: OpaquePointer?
     private let crypto: CryptoStore
+    private let path: String
     private let transient = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
 
     init(path: String, crypto: CryptoStore) throws {
         self.crypto = crypto
+        self.path = path
         let parent = URL(fileURLWithPath: path).deletingLastPathComponent()
         try FileManager.default.createDirectory(at: parent, withIntermediateDirectories: true)
         guard sqlite3_open_v2(path, &db, SQLITE_OPEN_CREATE | SQLITE_OPEN_READWRITE | SQLITE_OPEN_FULLMUTEX, nil) == SQLITE_OK else {
@@ -54,7 +57,7 @@ final class ClipDatabase {
         try execute("CREATE INDEX IF NOT EXISTS clips_order ON clips(pinned DESC, last_copied DESC)")
     }
 
-    isolated deinit { sqlite3_close(db) }
+    deinit { sqlite3_close(db) }
 
     private func message() -> String { String(cString: sqlite3_errmsg(db)) }
 
@@ -139,19 +142,43 @@ final class ClipDatabase {
     }
 
     func list(search: String = "", kind: ClipKind? = nil, limit: Int = 200) throws -> [ClipSummary] {
-        guard limit > 0 else { return [] }
-        let stmt = try prepare("""
-            SELECT id, kind, last_copied, source_name, source_bundle, sensitive, pinned, copy_count, payload, favorite_name, retention_seconds
-            FROM clips ORDER BY pinned DESC, last_copied DESC
-            """)
+        try page(query: HistoryQuery(search: search, kind: kind), after: nil, limit: limit).items
+    }
+
+    func page(query: HistoryQuery, after cursor: HistoryCursor?, limit: Int) throws -> HistoryPage {
+        guard limit > 0 else { return HistoryPage(items: [], nextCursor: nil, hasMore: false) }
+        let sql: String
+        if cursor == nil {
+            sql = """
+                SELECT id, kind, last_copied, source_name, source_bundle, sensitive, pinned, copy_count, payload, favorite_name, retention_seconds
+                FROM clips ORDER BY pinned DESC, last_copied DESC, id DESC
+                """
+        } else {
+            sql = """
+                SELECT id, kind, last_copied, source_name, source_bundle, sensitive, pinned, copy_count, payload, favorite_name, retention_seconds
+                FROM clips
+                WHERE pinned < ? OR (pinned = ? AND (last_copied < ? OR (last_copied = ? AND id < ?)))
+                ORDER BY pinned DESC, last_copied DESC, id DESC
+                """
+        }
+        let stmt = try prepare(sql)
         defer { sqlite3_finalize(stmt) }
-        let needle = search.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let cursor {
+            let pinned: Int32 = cursor.pinned ? 1 : 0
+            sqlite3_bind_int(stmt, 1, pinned)
+            sqlite3_bind_int(stmt, 2, pinned)
+            sqlite3_bind_double(stmt, 3, cursor.lastCopiedAt.timeIntervalSince1970)
+            sqlite3_bind_double(stmt, 4, cursor.lastCopiedAt.timeIntervalSince1970)
+            bind(cursor.id.uuidString, to: 5, in: stmt)
+        }
+        let needle = query.search.trimmingCharacters(in: .whitespacesAndNewlines)
         var results: [ClipSummary] = []
-        while results.count < limit, try nextRow(stmt) {
+        while try nextRow(stmt) {
+            if Task.isCancelled { throw CancellationError() }
             guard let idString = columnString(stmt, 0), let id = UUID(uuidString: idString),
                   let kindString = columnString(stmt, 1), let rowKind = ClipKind(rawValue: kindString) else { continue }
             // Old text rows can become code on read; other types cannot change.
-            if let kind, rowKind != kind, !(rowKind == .text && kind == .code) { continue }
+            if let kind = query.kind, rowKind != kind, !(rowKind == .text && kind == .code) { continue }
             var displayKind = rowKind
             var codeLanguage: String?
             let sourceName = columnString(stmt, 3)
@@ -175,7 +202,7 @@ final class ClipDatabase {
                 if !sensitive { preview = payload.preview }
                 missing = payload.hasMissingFiles
             }
-            if let kind, kind != displayKind { continue }
+            if let kind = query.kind, kind != displayKind { continue }
             if !needle.isEmpty && !sourceMatches && favoriteName?.localizedCaseInsensitiveContains(needle) != true
                 && !preview.localizedCaseInsensitiveContains(needle)
                 && codeLanguage?.localizedCaseInsensitiveContains(needle) != true { continue }
@@ -189,8 +216,14 @@ final class ClipDatabase {
                 retentionOverrideSeconds: sqlite3_column_type(stmt, 10) == SQLITE_NULL
                     ? nil : Int(sqlite3_column_int64(stmt, 10))
             ))
+            if results.count > limit { break }
         }
-        return results
+        let hasMore = results.count > limit
+        if hasMore { results.removeLast() }
+        let nextCursor = hasMore ? results.last.map {
+            HistoryCursor(pinned: $0.isPinned, lastCopiedAt: $0.lastCopiedAt, id: $0.id)
+        } : nil
+        return HistoryPage(items: results, nextCursor: nextCursor, hasMore: hasMore)
     }
 
     func payload(for id: UUID) throws -> ClipPayload? {
@@ -253,6 +286,21 @@ final class ClipDatabase {
         return deleted
     }
 
+    @discardableResult
+    func deleteUnpinned() throws -> Int {
+        try execute("BEGIN IMMEDIATE")
+        do {
+            try execute("DELETE FROM clips WHERE pinned=0")
+            let deleted = Int(sqlite3_changes(db))
+            try execute("COMMIT")
+            try execute("PRAGMA wal_checkpoint(TRUNCATE)")
+            return deleted
+        } catch {
+            try? execute("ROLLBACK")
+            throw error
+        }
+    }
+
     func purge(normalDays: Int?, sensitiveSeconds: TimeInterval, now: Date = .now) throws -> Int {
         // One atomic statement avoids a full Swift-side scan and a transaction per row.
         let stmt = try prepare("""
@@ -287,5 +335,68 @@ final class ClipDatabase {
             if let bundle = columnString(stmt, 0), let name = columnString(stmt, 1) { apps.append((bundle, name)) }
         }
         return apps
+    }
+
+    func statistics() throws -> StorageStatistics {
+        let stmt = try prepare("""
+            SELECT COUNT(*),
+                   COALESCE(SUM(length(payload) + COALESCE(length(favorite_name), 0)), 0),
+                   COALESCE(SUM(CASE WHEN pinned != 0 THEN 1 ELSE 0 END), 0)
+            FROM clips
+            """)
+        defer { sqlite3_finalize(stmt) }
+        guard try nextRow(stmt) else { throw DatabaseError.invalidRecord }
+        return StorageStatistics(
+            itemCount: Int(sqlite3_column_int64(stmt, 0)),
+            contentBytes: sqlite3_column_int64(stmt, 1),
+            diskBytes: diskUsageBytes(),
+            pinnedCount: Int(sqlite3_column_int64(stmt, 2))
+        )
+    }
+
+    /// Removes oldest unpinned rows until encrypted content fits the quota.
+    /// Pinned rows (including named favorites) are never removed.
+    func enforceQuota(bytes limit: Int64) throws -> QuotaResult {
+        let safeLimit = max(0, limit)
+        try execute("BEGIN IMMEDIATE")
+        do {
+            let stats = try statistics()
+            var removed = 0
+            var bytesToRemove = max(0, stats.contentBytes - safeLimit)
+            if bytesToRemove > 0 {
+                let candidates = try prepare("""
+                    SELECT id, length(payload) + COALESCE(length(favorite_name), 0)
+                    FROM clips WHERE pinned=0 ORDER BY last_copied ASC, id ASC
+                    """)
+                defer { sqlite3_finalize(candidates) }
+                let deletion = try prepare("DELETE FROM clips WHERE id=?")
+                defer { sqlite3_finalize(deletion) }
+                while bytesToRemove > 0, try nextRow(candidates) {
+                    guard let id = columnString(candidates, 0) else { continue }
+                    sqlite3_reset(deletion)
+                    sqlite3_clear_bindings(deletion)
+                    bind(id, to: 1, in: deletion)
+                    guard sqlite3_step(deletion) == SQLITE_DONE else { throw DatabaseError.sqlite(message()) }
+                    removed += Int(sqlite3_changes(db))
+                    bytesToRemove -= max(0, sqlite3_column_int64(candidates, 1))
+                }
+            }
+            try execute("COMMIT")
+            let finalStats = try statistics()
+            return QuotaResult(removedCount: removed,
+                               blockedByPinnedItems: finalStats.contentBytes > safeLimit,
+                               statistics: finalStats)
+        } catch {
+            try? execute("ROLLBACK")
+            throw error
+        }
+    }
+
+    private func diskUsageBytes() -> Int64 {
+        [path, path + "-wal", path + "-shm"].reduce(into: 0) { total, candidate in
+            guard let attributes = try? FileManager.default.attributesOfItem(atPath: candidate),
+                  let size = attributes[.size] as? NSNumber else { return }
+            total += size.int64Value
+        }
     }
 }

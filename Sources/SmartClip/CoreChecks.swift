@@ -4,6 +4,7 @@ import Combine
 import CryptoKit
 import CSQLite
 import Carbon
+import UniformTypeIdentifiers
 
 private struct CheckFailure: LocalizedError {
     let message: String
@@ -93,6 +94,23 @@ func runCoreChecks() async throws {
             let f = try Fixture()
             defer { f.cleanup() }
             try body(f)
+        }
+    }
+    func asyncTest(_ name: String, _ body: () async throws -> Void) async {
+        do {
+            try await body()
+            results.append(CheckResult(name: name, passed: true, detail: nil))
+            print("PASS \(name)")
+        } catch {
+            results.append(CheckResult(name: name, passed: false, detail: error.localizedDescription))
+            print("FAIL \(name): \(error.localizedDescription)")
+        }
+    }
+    func asyncIntegration(_ name: String, _ body: (Fixture) async throws -> Void) async {
+        await asyncTest(name) {
+            let f = try Fixture()
+            defer { f.cleanup() }
+            try await body(f)
         }
     }
     func png() throws -> Data {
@@ -225,15 +243,15 @@ func runCoreChecks() async throws {
         try expectFailure { _ = try wrongKey.payload(for: rows[0].id) }
     }
     integration("database.no-plaintext-in-db-or-wal") { f in
-        let secret = "UNIQUE-TEST-SECRET-6DD82A9F"
+        let plaintextMarker = "UNIQUE-TEST-PLAINTEXT-6DD82A9F"
         let path = "/private/UNIQUE-TEST-PATH-AD531F"
         let bytes = Data("UNIQUE-TEST-IMAGE-BYTES-37A922".utf8)
-        try f.capture(.text(secret), sensitive: true)
+        try f.capture(.text(plaintextMarker), sensitive: true)
         try f.capture(.files([path]))
         try f.capture(.image(bytes))
         for name in ["history.sqlite", "history.sqlite-wal"] {
             let data = try Data(contentsOf: f.directory.appendingPathComponent(name))
-            for token in [Data(secret.utf8), Data(path.utf8), bytes] {
+            for token in [Data(plaintextMarker.utf8), Data(path.utf8), bytes] {
                 try expect(data.range(of: token) == nil, "Plaintext content on disk")
             }
         }
@@ -777,6 +795,145 @@ func runCoreChecks() async throws {
         try expect(try f.db.list(kind: .url).count == 1, "URL filter decoded unrelated text")
         try expectFailure { _ = try f.db.list() }
     }
+    await asyncIntegration("history-store.serializes-concurrent-captures") { f in
+        let store = HistoryStore(database: f.db)
+        let baseDate = f.time
+        try await withThrowingTaskGroup(of: Void.self) { group in
+            for index in 0..<40 {
+                group.addTask {
+                    _ = try await store.capture(
+                        .text("concurrent-\(index)"), sourceName: "Worker", sourceBundleID: "test.worker",
+                        sensitive: false, at: baseDate.addingTimeInterval(Double(index))
+                    )
+                }
+            }
+            try await group.waitForAll()
+        }
+        let page = try await store.page(limit: 100)
+        try expect(page.items.count == 40, "Concurrent store captures were lost")
+        try expect(Set(page.items.map(\.id)).count == 40, "Concurrent store captures produced duplicate rows")
+        try expect(page.items.map(\.lastCopiedAt) == page.items.map(\.lastCopiedAt).sorted(by: >),
+                   "Concurrent store captures are not ordered deterministically")
+    }
+    await asyncIntegration("history-store.cursor-pagination-is-complete-and-stable") { f in
+        let baseDate = f.time
+        for index in 0..<9 {
+            let marker = index.isMultiple(of: 2) ? "match" : "other"
+            try f.capture(.text("\(marker)-\(index)"), at: baseDate)
+        }
+        let pinned = try f.db.list(search: "match-0", limit: 20)[0]
+        try f.db.setPinned(true, for: pinned.id)
+        let store = HistoryStore(database: f.db)
+
+        var cursor: HistoryCursor?
+        var all: [ClipSummary] = []
+        repeat {
+            let page = try await store.page(after: cursor, limit: 3)
+            try expect(page.items.count <= 3, "History page exceeded its limit")
+            if page.hasMore { try expect(page.nextCursor != nil, "Page with more results has no cursor") }
+            all.append(contentsOf: page.items)
+            cursor = page.nextCursor
+        } while cursor != nil
+        try expect(all.count == 9 && Set(all.map(\.id)).count == 9, "Pagination lost or duplicated entries")
+        try expect(all.first?.id == pinned.id, "Pinned entries did not stay first across pages")
+
+        let query = HistoryQuery(search: "match")
+        let first = try await store.page(query, limit: 2)
+        let second = try await store.page(query, after: first.nextCursor, limit: 10)
+        let matches = first.items + second.items
+        try expect(matches.count == 5 && Set(matches.map(\.id)).count == 5,
+                   "Filtered pagination lost or duplicated matches")
+        try expect(!second.hasMore && second.nextCursor == nil, "Final filtered page still reports more results")
+        let emptyPage = try await store.page(limit: 0)
+        try expect(emptyPage.items.isEmpty, "Zero-sized actor page decoded rows")
+    }
+    await asyncIntegration("history-store-quota-statistics-and-delete-unpinned") { f in
+        let old = f.time.addingTimeInterval(-20)
+        try f.capture(.text(String(repeating: "old-", count: 600)), at: old)
+        try f.capture(.text(String(repeating: "new-", count: 600)), at: f.time)
+        try f.capture(.text("favorite payload"), at: f.time.addingTimeInterval(10))
+        let favorite = try f.db.list(search: "favorite payload", limit: 10)[0]
+        try f.db.setFavoriteName("Keep me", for: favorite.id)
+        try f.db.setPinned(true, for: favorite.id)
+        let store = HistoryStore(database: f.db)
+
+        let before = try await store.statistics()
+        try expect(before.itemCount == 3 && before.pinnedCount == 1, "Storage statistics count is wrong")
+        try expect(before.contentBytes > 0 && before.diskBytes > 0, "Storage statistics omit byte usage")
+
+        let quota = try await store.enforceQuota(bytes: 0)
+        try expect(quota.removedCount == 2, "Quota did not remove every unpinned entry")
+        try expect(quota.blockedByPinnedItems, "Quota did not explain that pinned data exceeds the limit")
+        try expect(quota.statistics.itemCount == 1 && quota.statistics.pinnedCount == 1,
+                   "Quota removed a pinned favorite")
+        let survivor = try await store.page(limit: 10)
+        try expect(survivor.items.first?.id == favorite.id && survivor.items.first?.favoriteName == "Keep me",
+                   "Quota changed the protected favorite")
+
+        _ = try await store.capture(.text("temporary"), sourceName: nil, sourceBundleID: nil,
+                                    sensitive: false, at: f.time.addingTimeInterval(20))
+        let deleted = try await store.deleteUnpinned()
+        try expect(deleted == 1, "Delete-unpinned returned the wrong count")
+        let afterCleanup = try await store.page(limit: 10)
+        try expect(afterCleanup.items.map(\.id) == [favorite.id], "Delete-unpinned removed a favorite or kept history")
+    }
+    integration("model-sensitive-storage-policy-skips-without-touching-existing-row") { f in
+        try f.capture(.text("same synthetic secret"), sensitive: false)
+        let original = try f.row()
+        f.model.refresh()
+        f.model.setMonitoring(true)
+        f.model.setStoreSensitive(false)
+        try f.write("same synthetic secret", marker: "org.nspasteboard.ConcealedType")
+        f.poll()
+        let unchanged = try f.row()
+        try expect(unchanged.id == original.id && unchanged.copyCount == original.copyCount,
+                   "Skipped sensitive content still changed an existing row")
+        try expect(f.model.statusMessage.contains("not stored"), "Sensitive storage policy was not explained")
+
+        f.poll()
+        try expect(try f.db.list().count == 1, "Unchanged skipped sensitive content was processed again")
+        try f.write("ordinary follow-up")
+        f.poll()
+        try expect(try f.db.list().count == 2, "Sensitive storage policy also blocked regular content")
+
+        f.model.setStorageLimitBytes(-1)
+        let reloaded = AppModel(defaults: f.defaults, pasteboard: f.pasteboard, database: f.db,
+                                now: { f.time }, systemIntegrationsEnabled: false)
+        try expect(!reloaded.storeSensitive && reloaded.storageLimitBytes == 0,
+                   "Privacy or storage-limit setting did not persist safely")
+    }
+    integration("drag-provider-types-and-sensitive-guard") { f in
+        let regular = ClipSummary(id: UUID(), kind: .text, lastCopiedAt: f.time, sourceName: nil,
+                                  sourceBundleID: nil, isSensitive: false, isPinned: false,
+                                  copyCount: 1, preview: "text", hasMissingFiles: false)
+        let textProvider = ClipDragProvider.makeProvider(for: regular) { _ in .text("text") }
+        try expect(textProvider?.registeredTypeIdentifiers.contains(UTType.utf8PlainText.identifier) == true,
+                   "Text drag provider has no plain-text representation")
+        let sensitive = ClipSummary(id: UUID(), kind: .text, lastCopiedAt: f.time, sourceName: nil,
+                                    sourceBundleID: nil, isSensitive: true, isPinned: false,
+                                    copyCount: 1, preview: "••••••••", hasMissingFiles: false)
+        try expect(ClipDragProvider.makeProvider(for: sensitive) { _ in .text("hidden") } == nil,
+                   "Sensitive entry can be dragged without reveal")
+
+        let first = f.directory.appendingPathComponent("first.txt")
+        let second = f.directory.appendingPathComponent("second.txt")
+        try Data("a".utf8).write(to: first)
+        try Data("b".utf8).write(to: second)
+        let providers = ClipDragProvider.fileProviders(for: .files([first.path, second.path]))
+        try expect(providers.count == 2, "Multi-file drag did not create one provider per file")
+    }
+    integration("model-preview-and-keyboard-selection-state") { f in
+        try f.capture(.text("first"), at: f.time)
+        try f.capture(.text("second"), at: f.time.addingTimeInterval(1))
+        f.model.refresh()
+        try expect(f.model.selectedItem?.preview == "second", "Keyboard selection did not resolve first row")
+        f.model.togglePreview()
+        try expect(f.model.previewedID == f.model.items.first?.id, "Space-style preview did not open selected row")
+        f.model.togglePreview()
+        try expect(f.model.previewedID == nil, "Space-style preview did not close")
+        f.model.moveSelection(1)
+        try expect(f.model.selectedItem?.preview == "first", "Keyboard selection did not move")
+    }
     test("window.native-controls-and-sizing") {
         let panel = HistoryPanel()
         defer { panel.close() }
@@ -784,7 +941,7 @@ func runCoreChecks() async throws {
         try expect(panel.standardWindowButton(.closeButton)?.isEnabled == true, "Close button missing")
         try expect(panel.standardWindowButton(.miniaturizeButton)?.isEnabled == true, "Minimize button missing")
         try expect(!panel.isReleasedWhenClosed && panel.canBecomeKey, "Window cannot be reused/focused")
-        try expect(panel.contentMinSize == NSSize(width: 560, height: 540), "Minimum size not enforced")
+        try expect(panel.contentMinSize == NSSize(width: 700, height: 580), "Minimum size not enforced")
     }
     integration("menu-bar.pause-actions") { f in
         let delegate = AppDelegate(model: f.model)
@@ -836,7 +993,7 @@ func runCoreChecks() async throws {
         try expect(responsive && waiting, "Main actor blocked while loading key")
         try expect(model.statusMessage == "History ready.", "Successful startup not completed")
         model.setMonitoring(true); try f.write("after startup")
-        model.processChanges(sourceName: "Test", sourceBundleID: "test.startup")
+        await model.processChangesAndWait(sourceName: "Test", sourceBundleID: "test.startup")
         try expect(model.items.count == 1, "Capture unavailable after startup")
     }
     await startupTest("startup.reopens-existing-history-with-same-key") { f in

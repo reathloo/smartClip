@@ -33,10 +33,10 @@ service, telemetry, or remote processing.
 
 | History | Workflow | Privacy and control |
 | --- | --- | --- |
-| Text, URLs, email, code, images, and file references | Search, filters, list and card views | Encrypted local payloads |
-| Duplicate handling and source-app estimate | Named favorites and per-entry retention | Sensitive-content masking |
-| Missing-file detection | Configurable shortcut and optional automatic paste | Capture pauses and excluded apps |
-| Automatic cleanup | Menu-bar status and launch at login | Delete-all confirmation and no telemetry |
+| Text, URLs, email, code, images, and file references | Search, filters, full preview, list and card views | Encrypted local payloads |
+| Duplicate handling and source-app estimate | Keyboard actions, drag-and-drop, and automatic paste | Sensitive-content masking or complete exclusion |
+| Missing-file detection and paged history | Named favorites and per-entry retention | Capture pauses and excluded apps |
+| Automatic cleanup and storage limits | Menu-bar status and launch at login | Keep-favorites cleanup and no telemetry |
 
 > [!NOTE]
 > SmartClip stores references to files rather than copying them. Source-app,
@@ -51,7 +51,7 @@ SmartClip currently supports **Apple Silicon Macs running macOS 14 or newer**.
 3. Launch SmartClip and complete the short setup.
 
 > [!WARNING]
-> The current free beta is not signed with an Apple Developer ID or notarized.
+> The current free release is not signed with an Apple Developer ID or notarized.
 > On first launch, macOS requires **System Settings → Privacy & Security → Open
 > Anyway**. See the [installation guide](docs/INSTALLATION.md) for every step.
 
@@ -65,7 +65,8 @@ time.
 SmartClip uses a local SQLite database for metadata and AES-GCM for clipboard
 payloads. The encryption key is kept in Keychain. Sensitive entries stay masked,
 are excluded from full-text search, and expire after a shorter period even when
-pinned.
+pinned. You can also configure SmartClip to never store detected sensitive
+clipboard content.
 
 Some metadata—such as type, timestamps, and estimated source-app name—remains
 unencrypted so the app can organize the history. Read the complete
@@ -89,7 +90,7 @@ Useful commands:
 ```sh
 zsh scripts/run-dev.sh          # build and restart the real app
 zsh scripts/run-dev.sh --ui     # isolated UI preview with sample data
-zsh scripts/test.sh             # run all 114 core checks
+zsh scripts/test.sh             # run all 120 core checks
 zsh scripts/build-app.sh        # create dist/SmartClip.app
 ```
 
@@ -104,7 +105,7 @@ styled DMG, verifies the package, signs the update with Sparkle EdDSA, creates a
 GitHub Release, and publishes the appcast through GitHub Pages.
 
 ```sh
-zsh scripts/package-release.sh v0.1.0-beta.2
+zsh scripts/package-release.sh v0.2.0
 ```
 
 See the [release guide](docs/RELEASE.md), [test report](docs/TEST_REPORT.md), and
