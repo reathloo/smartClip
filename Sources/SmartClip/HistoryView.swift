@@ -6,34 +6,44 @@ struct HistoryView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @FocusState private var searchFocused: Bool
-    @State private var selectedID: UUID?
     @State private var searchText = ""
 
     private var selectedItem: ClipSummary? {
-        guard let id = HistoryNavigation.selected(in: model.items.map(\.id), explicit: selectedID, search: searchText) else { return nil }
+        guard let id = HistoryNavigation.selected(in: model.items.map(\.id), explicit: model.selectedID, search: searchText) else { return nil }
         return model.item(for: id)
     }
 
     var body: some View {
         VStack(spacing: 0) {
-            topBar
-            if model.items.isEmpty {
-                emptyState
+            if let previewedID = model.previewedID, let item = model.item(for: previewedID) {
+                ClipPreviewView(
+                    item: item,
+                    loadPayload: { await model.loadPayload(for: $0) },
+                    onClose: { model.closePreview() },
+                    onCopy: { model.copy(item) },
+                    onOpen: item.kind == .url ? { model.openURL(item) } : nil
+                )
             } else {
-                ScrollViewReader { proxy in
-                    ScrollView {
-                        LazyVStack(spacing: model.cardView ? 10 : 4) {
-                            entrySection("Pinned", pinned: true)
-                            entrySection("Recently copied", pinned: false)
+                topBar
+                if model.items.isEmpty {
+                    emptyState
+                } else {
+                    ScrollViewReader { proxy in
+                        ScrollView {
+                            LazyVStack(spacing: model.cardView ? 10 : 4) {
+                                entrySection("Pinned", pinned: true)
+                                entrySection("Recently copied", pinned: false)
+                                loadMoreSection
+                            }
+                            .padding(.horizontal, 12).padding(.bottom, 14)
                         }
-                        .padding(.horizontal, 12).padding(.bottom, 14)
-                    }
-                    .onChange(of: selectedID) { _, id in
-                        if let id { proxy.scrollTo(id) }
+                        .onChange(of: model.selectedID) { _, id in
+                            if let id { proxy.scrollTo(id) }
+                        }
                     }
                 }
+                footer
             }
-            footer
         }
         .tint(ClipTheme.accent)
         .background(ClipTheme.canvas)
@@ -41,11 +51,25 @@ struct HistoryView: View {
         .preferredColorScheme(model.darkMode ? .dark : .light)
         .environment(\.locale, Locale(identifier: "en_US"))
         .onChange(of: model.items.map(\.id)) { _, ids in
-            if let selectedID, !ids.contains(selectedID) { self.selectedID = nil }
+            if let selectedID = model.selectedID, !ids.contains(selectedID) { model.selectedID = nil }
+            if let previewedID = model.previewedID, !ids.contains(previewedID) { model.previewedID = nil }
         }
         .onAppear {
             searchText = model.search
             searchFocused = false
+        }
+        .onChange(of: model.focusSearchRequest) { _, _ in searchFocused = true }
+        .alert("Delete selected entry?", isPresented: Binding(
+            get: { model.pendingDeleteID != nil },
+            set: { if !$0 { model.pendingDeleteID = nil } }
+        )) {
+            Button("Delete", role: .destructive) {
+                if let id = model.pendingDeleteID, let item = model.item(for: id) { model.delete(item) }
+                model.pendingDeleteID = nil
+            }
+            Button("Cancel", role: .cancel) { model.pendingDeleteID = nil }
+        } message: {
+            Text("This removes the entry from SmartClip. The current macOS clipboard is unchanged.")
         }
         .animation(reduceMotion ? nil : .spring(response: 0.34, dampingFraction: 1), value: model.cardView)
         .animation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 1), value: model.filter)
@@ -112,7 +136,7 @@ struct HistoryView: View {
                 .textFieldStyle(.plain).font(.system(size: 14))
                 .focused($searchFocused)
                 .onChange(of: searchText) { _, query in
-                    selectedID = nil
+                    model.selectedID = nil
                     model.scheduleSearch(query)
                 }
                 .onChange(of: model.search) { _, query in
@@ -155,7 +179,7 @@ struct HistoryView: View {
     private func filterButton(_ title: String, symbol: String, kind: ClipKind?) -> some View {
         let active = model.filter == kind
         return Button {
-            model.filter = kind; selectedID = nil; model.applySearchImmediately()
+            model.filter = kind; model.selectedID = nil; model.applySearchImmediately()
         } label: {
             HStack(spacing: 5) {
                 Image(systemName: symbol).font(.system(size: 10, weight: .medium))
@@ -181,7 +205,8 @@ struct HistoryView: View {
             }
             .foregroundStyle(.secondary).padding(.horizontal, 10).padding(.top, 16).padding(.bottom, 5)
             ForEach(items) { item in
-                ClipRow(model: model, snapshot: item, card: model.cardView, selected: selectedID == item.id)
+                ClipRow(model: model, snapshot: item, card: model.cardView, selected: selectedID == item.id,
+                        onPreview: { model.selectedID = item.id; model.previewedID = item.id })
                     .id(item.id)
             }
         }
@@ -232,7 +257,7 @@ struct HistoryView: View {
                 .multilineTextAlignment(.center).lineSpacing(3)
             if searching {
                 Button("Reset search and filters") {
-                    selectedID = nil
+                    model.selectedID = nil
                     searchText = ""
                     model.resetSearch()
                 }
@@ -311,8 +336,25 @@ struct HistoryView: View {
     private func moveSelection(_ offset: Int) {
         // Resolve the latest query before selecting, even within the debounce interval.
         model.applySearchImmediately(searchText)
-        selectedID = HistoryNavigation.moved(in: model.items.map(\.id), explicit: selectedID,
-                                              search: searchText, offset: offset)
+        model.selectedID = HistoryNavigation.moved(in: model.items.map(\.id), explicit: model.selectedID,
+                                                   search: searchText, offset: offset)
+    }
+
+    @ViewBuilder private var loadMoreSection: some View {
+        if model.hasMoreHistory || model.isLoadingHistory {
+            HStack(spacing: 10) {
+                if model.isLoadingHistory { ProgressView().controlSize(.small) }
+                Button(model.isLoadingHistory ? "Loading…" : "Load 100 older entries") {
+                    model.loadMoreHistory()
+                }
+                .buttonStyle(.bordered)
+                .disabled(model.isLoadingHistory)
+                Text("Showing \(model.items.count)")
+                    .font(.system(size: 10)).foregroundStyle(.secondary)
+            }
+            .padding(.vertical, 16)
+            .frame(maxWidth: .infinity)
+        }
     }
 }
 
@@ -324,11 +366,13 @@ private struct ClipRow: View {
     private var item: ClipSummary { model.item(for: snapshot.id) ?? snapshot }
     let card: Bool
     let selected: Bool
+    let onPreview: () -> Void
     @State private var confirmUnmark = false
     @State private var confirmExclude = false
     @State private var editFavoriteName = false
     @State private var favoriteDraft = ""
     @State private var hovered = false
+    @State private var dragFileURLs: [URL] = []
 
     var body: some View {
         HStack(alignment: .top, spacing: 8) {
@@ -389,6 +433,19 @@ private struct ClipRow: View {
             .accessibilityAddTraits(selected ? .isSelected : [])
             VStack(alignment: .trailing, spacing: 7) {
                 HStack(spacing: 2) {
+                    if dragFileURLs.count > 1 {
+                        MultiFileDragHandle(urls: dragFileURLs)
+                            .frame(width: 24, height: 24)
+                    }
+                    Button(action: onPreview) {
+                        Image(systemName: "eye")
+                            .font(.system(size: 11)).frame(width: 24, height: 24)
+                    }
+                    .buttonStyle(IconControlStyle())
+                    .foregroundStyle(.secondary)
+                    .opacity(hovered || selected ? 1 : 0.65)
+                    .help("Preview")
+                    .accessibilityLabel("Preview entry")
                     Button { model.pin(item) } label: {
                         Image(systemName: item.isPinned ? "pin.fill" : "pin")
                             .font(.system(size: 11)).frame(width: 24, height: 24)
@@ -414,6 +471,13 @@ private struct ClipRow: View {
             .strokeBorder(selected ? ClipTheme.accent.opacity(0.34) : card ? ClipTheme.line : .clear))
         .shadow(color: card ? .black.opacity(0.035) : .clear, radius: 5, y: 2)
         .onHover { hovered = $0 }
+        .modifier(ClipDragModifier(model: model, item: item))
+        .task(id: item.id) {
+            guard item.kind == .files, !item.isSensitive, !item.hasMissingFiles,
+                  let paths = await model.loadPayload(for: item.id)?.filePaths else { return }
+            dragFileURLs = paths.map { URL(fileURLWithPath: $0) }
+                .filter { FileManager.default.fileExists(atPath: $0.path) }
+        }
         .confirmationDialog("Keep longer?", isPresented: $confirmUnmark) {
             Button("Mark as regular") { model.markSensitive(item, false) }
         } message: {
@@ -516,6 +580,22 @@ private struct ClipRow: View {
     }
 }
 
+private struct ClipDragModifier: ViewModifier {
+    let model: AppModel
+    let item: ClipSummary
+
+    @ViewBuilder func body(content: Content) -> some View {
+        if item.isSensitive || item.hasMissingFiles {
+            content
+        } else {
+            content.onDrag {
+                ClipDragProvider.makeProvider(for: item) { await model.loadPayload(for: $0) }
+                    ?? NSItemProvider()
+            }
+        }
+    }
+}
+
 private struct ClipImagePreview: View {
     let model: AppModel
     let id: UUID
@@ -530,8 +610,11 @@ private struct ClipImagePreview: View {
                     .background(Color.primary.opacity(0.025), in: RoundedRectangle(cornerRadius: 8))
             }
         }
-        .onAppear {
-            if let data = model.payload(for: id)?.imageData { image = NSImage(data: data) }
+        .task(id: id) {
+            guard let data = await model.loadPayload(for: id)?.imageData,
+                  !Task.isCancelled else { return }
+            guard let decoded = await ClipImageDecoder.decode(data), !Task.isCancelled else { return }
+            image = NSImage(cgImage: decoded, size: .zero)
         }
         .onDisappear { image = nil }
     }

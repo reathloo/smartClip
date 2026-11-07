@@ -9,3 +9,6 @@ SmartClip processes clipboard history locally on your Mac. It has no account, te
 - Files are not duplicated. SmartClip stores encrypted references to the originals.
 - Automatic paste requires Accessibility permission. Copy only works without this permission.
 - Sensitive-content detection recognizes known pasteboard markers and unambiguous credit card numbers. It cannot reliably detect every password.
+- By default, detected sensitive entries are encrypted, masked, excluded from content search, and given shorter retention limits. You can instead configure SmartClip to never store them.
+- The configurable storage limit is based on encrypted payload size. When it is reached, SmartClip removes the oldest unpinned entries first and never removes pinned favorites automatically.
+- Drag-and-drop is disabled for sensitive entries and missing file references.

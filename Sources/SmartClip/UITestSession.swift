@@ -22,7 +22,7 @@ final class UITestSession {
         model = AppModel(defaults: defaults, pasteboard: pasteboard, database: db, systemIntegrationsEnabled: false)
         let samples: [(String, Bool, String, String)] = [
             ("https://example.org", false, "Safari", "com.apple.Safari"),
-            ("SmartClip test note", false, "Notes", "com.apple.Notes"),
+            ("SmartClip test note with a deliberately longer body. It demonstrates the full preview, text selection, keyboard navigation, and copying without truncating the original content.", false, "Notes", "com.apple.Notes"),
             ("def greet(name):\n    return name", false, "Visual Studio Code", "com.microsoft.VSCode"),
             ("hello@example.org", false, "Mail", "com.apple.mail"),
             ("synthetic-secret-42", true, "Test Password Manager", "dev.smartclip.test-vault")
@@ -30,6 +30,11 @@ final class UITestSession {
         for (index, sample) in samples.enumerated() {
             try db.capture(.text(sample.0), sourceName: sample.2, sourceBundleID: sample.3,
                            sensitive: sample.1, at: .now.addingTimeInterval(-Double(index * 10)))
+        }
+        for index in 0..<110 {
+            try db.capture(.text("Older test entry \(index)"), sourceName: "Notes",
+                           sourceBundleID: "com.apple.Notes", sensitive: false,
+                           at: .now.addingTimeInterval(-Double(1_000 + index)))
         }
         let first = try db.list()[0]
         try db.setPinned(true, for: first.id)

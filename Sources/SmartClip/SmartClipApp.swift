@@ -55,7 +55,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private var statusItem: NSStatusItem?
     private var panel: HistoryPanel?
-    private var settingsWindow: NSWindow?
     private var pauseObservation: AnyCancellable?
     private var updaterController: SPUStandardUpdaterController?
 
@@ -153,18 +152,33 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func quitFromMenu() { NSApp.terminate(nil) }
 
     private func toggleHistory() {
-        if let panel, panel.isVisible && !panel.isMiniaturized { panel.orderOut(nil); return }
+        if let panel, panel.isVisible && !panel.isMiniaturized {
+            if model.showingSettings { showHistory() }
+            else { panel.orderOut(nil) }
+            return
+        }
         showHistory()
     }
 
     private func showHistory() {
+        model.showingSettings = false
+        showPanel()
+    }
+
+    private func showSettings() {
+        model.showingSettings = true
+        showPanel()
+    }
+
+    private func showPanel() {
         let frontmost = NSWorkspace.shared.frontmostApplication
         if frontmost?.processIdentifier != ProcessInfo.processInfo.processIdentifier {
             model.previousApp = frontmost
         }
         if panel == nil {
             let panel = HistoryPanel()
-            panel.contentView = NSHostingView(rootView: HistoryView(model: model))
+            panel.contentView = NSHostingView(rootView: SmartClipWindowContent(model: model))
+            panel.commandHandler = { [weak self] event in self?.handlePanelCommand(event) ?? false }
             panel.center()
             self.panel = panel
         }
@@ -178,33 +192,66 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         panel.makeKeyAndOrderFront(nil)
     }
 
-    private func showSettings() {
-        if settingsWindow == nil {
-            let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 760, height: 660),
-                                  styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
-            window.title = "SmartClip Settings"
-            window.isReleasedWhenClosed = false
-            window.minSize = NSSize(width: 700, height: 600)
-            window.titlebarAppearsTransparent = true
-            window.center()
-            window.contentView = NSHostingView(rootView: SettingsView(model: model))
-            settingsWindow = window
+    private func handlePanelCommand(_ event: NSEvent) -> Bool {
+        guard event.type == .keyDown else { return false }
+        let modifiers = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+            .subtracting([.capsLock, .numericPad, .function])
+        let character = event.charactersIgnoringModifiers?.lowercased()
+        if character == "w", modifiers == .command { panel?.orderOut(nil); return true }
+        if character == "f", modifiers == .command, !model.showingSettings {
+            model.focusSearch(); return true
         }
-        NSApp.activate(ignoringOtherApps: true)
-        settingsWindow?.makeKeyAndOrderFront(nil)
+        guard !model.showingSettings else { return false }
+        if event.keyCode == 53, modifiers.isEmpty {
+            if model.previewedID != nil { model.closePreview() }
+            else if !model.search.isEmpty || model.filter != nil { model.resetSearch() }
+            else { panel?.orderOut(nil) }
+            return true
+        }
+        let isEditingText = panel?.firstResponder is NSTextView
+        guard !isEditingText else { return false }
+        if event.keyCode == 49, modifiers.isEmpty { model.togglePreview(); return true }
+        if character == "c", modifiers == .command, let item = model.selectedItem {
+            model.copy(item); return true
+        }
+        if character == "o", modifiers == .command, let item = model.selectedItem, item.kind == .url {
+            model.openURL(item); return true
+        }
+        if character == "p", modifiers == .command, let item = model.selectedItem {
+            model.pin(item); return true
+        }
+        if (event.keyCode == 51 || event.keyCode == 117), modifiers.isEmpty, let item = model.selectedItem {
+            model.pendingDeleteID = item.id; return true
+        }
+        if event.keyCode == 125, modifiers.isEmpty { model.moveSelection(1); return true }
+        if event.keyCode == 126, modifiers.isEmpty { model.moveSelection(-1); return true }
+        if event.keyCode == 36, modifiers.isEmpty, let item = model.selectedItem {
+            model.copy(item); return true
+        }
+        return false
+    }
+}
+
+private struct SmartClipWindowContent: View {
+    @ObservedObject var model: AppModel
+
+    var body: some View {
+        if model.showingSettings { SettingsView(model: model) }
+        else { HistoryView(model: model) }
     }
 }
 
 final class HistoryPanel: NSPanel {
+    var commandHandler: ((NSEvent) -> Bool)?
     init() {
-        super.init(contentRect: NSRect(x: 0, y: 0, width: 600, height: 680),
+        super.init(contentRect: NSRect(x: 0, y: 0, width: 760, height: 680),
                    styleMask: [.titled, .closable, .miniaturizable, .resizable, .nonactivatingPanel],
                    backing: .buffered, defer: false)
         title = "SmartClip"
         titlebarSeparatorStyle = .none
         isReleasedWhenClosed = false
         isMovable = true
-        contentMinSize = NSSize(width: 560, height: 540)
+        contentMinSize = NSSize(width: 700, height: 580)
         level = .floating
         isFloatingPanel = true
         hidesOnDeactivate = true
@@ -214,18 +261,18 @@ final class HistoryPanel: NSPanel {
 
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { false }
-    override func cancelOperation(_ sender: Any?) { orderOut(nil) }
+    override func cancelOperation(_ sender: Any?) {
+        if commandHandler?(NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [],
+                                            timestamp: 0, windowNumber: windowNumber, context: nil,
+                                            characters: "\u{1b}", charactersIgnoringModifiers: "\u{1b}",
+                                            isARepeat: false, keyCode: 53)!) == true { return }
+        orderOut(nil)
+    }
 
     override func sendEvent(_ event: NSEvent) {
         // Handle dismissal before the search field's editor consumes Escape.
         if event.type == .keyDown {
-            let modifiers = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
-                .subtracting([.capsLock, .numericPad, .function])
-            if (event.keyCode == 53 && modifiers.isEmpty)
-                || (event.charactersIgnoringModifiers == "w" && modifiers == .command) {
-                orderOut(nil)
-                return
-            }
+            if commandHandler?(event) == true { return }
         }
         super.sendEvent(event)
     }

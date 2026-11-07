@@ -7,11 +7,11 @@
 
 ## Installation
 
-1. Download `SmartClip-0.1.0-beta.2-macOS-arm64.dmg`.
+1. Download `SmartClip-0.2.0-macOS-arm64.dmg`.
 2. Optionally verify the checksum in Terminal:
 
    ```sh
-   shasum -a 256 -c SmartClip-0.1.0-beta.2-macOS-arm64.dmg.sha256
+   shasum -a 256 -c SmartClip-0.2.0-macOS-arm64.dmg.sha256
    ```
 
 3. Open the DMG and drag **SmartClip.app** to **Applications**.
@@ -19,7 +19,7 @@
 5. Open **System Settings → Privacy & Security** and choose **Open Anyway** for SmartClip.
 6. Choose **Open** again in the confirmation dialog.
 
-This confirmation is required because the free beta has no Apple Developer ID and is not notarized. macOS then records a local exception for this app. See Apple's guide: [Open a Mac app from an unidentified developer](https://support.apple.com/en-us/guide/mac-help/mh40616/mac).
+This confirmation is required because the free release has no Apple Developer ID and is not notarized. macOS then records a local exception for this app. See Apple's guide: [Open a Mac app from an unidentified developer](https://support.apple.com/en-us/guide/mac-help/mh40616/mac).
 
 ## First launch
 

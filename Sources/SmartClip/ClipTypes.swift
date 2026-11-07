@@ -1,7 +1,7 @@
 import Foundation
 import CryptoKit
 
-enum ClipKind: String, Codable, CaseIterable, Identifiable {
+enum ClipKind: String, Codable, CaseIterable, Identifiable, Sendable {
     case text, code, url, email, image, files
     var id: String { rawValue }
     var label: String {
@@ -26,7 +26,7 @@ enum ClipKind: String, Codable, CaseIterable, Identifiable {
     }
 }
 
-struct ClipPayload: Codable, Equatable {
+struct ClipPayload: Codable, Equatable, Sendable {
     let kind: ClipKind
     let text: String?
     let imageData: Data?
@@ -95,7 +95,7 @@ struct ClipPayload: Codable, Equatable {
     }
 }
 
-struct ClipSummary: Identifiable, Equatable {
+struct ClipSummary: Identifiable, Equatable, Sendable {
     let id: UUID
     let kind: ClipKind
     let lastCopiedAt: Date

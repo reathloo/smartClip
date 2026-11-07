@@ -1,12 +1,12 @@
 # SmartClip Test Report and Reproducible Verification
 
-Last updated: October 30, 2026.
+Last updated: November 7, 2026.
 
 ## Result
 
-Run the automated suite with `zsh scripts/test.sh`. It contains **114 named checks** with multiple assertions. Machine-readable results are written to `.build/test-results/core.json`; console output is written to `.build/test-results/core.log`.
+Run the automated suite with `zsh scripts/test.sh`. It contains **120 named checks** with multiple assertions. Machine-readable results are written to `.build/test-results/core.json`; console output is written to `.build/test-results/core.log`.
 
-The initial 54-check run reproduced five failures. All five were fixed, and later integration coverage expanded the suite. UI checks are separate and are not counted among the 114 automated checks.
+The initial 54-check run reproduced five failures. All five were fixed, and later integration coverage expanded the suite. UI checks are separate and are not counted among the 120 automated checks.
 
 Tests use random temporary databases, isolated UserDefaults suites, named private pasteboards, and generated keys. They do not read real clipboard history or access the real Keychain. The shortcut check temporarily registers ⌃⌥⇧⌘F18/F19 and releases both combinations afterward. It fails with an explanation if another process already owns either shortcut.
 
@@ -42,11 +42,14 @@ Sensitive values receive a ConcealedType marker when copied. Hotkey handlers and
 | Shortcut | Native registration, conflict, failed replacement, removal, release, callback | Physical global key routing remains manual |
 | Window | Native close and minimize controls, movable and resizable panel, minimum size, reuse | Visibility, dragging, minimizing, and reopening need interactive confirmation |
 | Startup | Key-loading failure, responsive UI during wait, reopening existing history with the same key | Real Keychain ACL and macOS restart remain manual |
+| Background history store | Actor-serialized concurrent capture, cursor pagination, encrypted search, cancellation checks | Instruments remains the source of truth for real-world jank |
+| Storage controls | Encrypted and disk byte statistics, quota pruning, pinned preservation, delete-unpinned cleanup | Long-term WAL growth remains a manual soak test |
+| Preview and drag | Keyboard preview state, sensitive guard, pasteboard types, one provider per file | Drops into third-party apps remain manual |
 | Updates | Embedded Sparkle framework, signed-feed configuration, menu action, package linkage, and public-key presence | Published feed and end-to-end replacement remain release acceptance checks |
 
 ## Direct UI check with sample data
 
-The following behavior was checked in `.build/SmartClip Test.app` in Dark Mode:
+The following behavior was checked in `.build/SmartClip Test.app`:
 
 - Searching for the sample note returns exactly one result.
 - Search plus Enter keeps the history open; selecting with ↓ changes Enter to Copy.
@@ -56,7 +59,13 @@ The following behavior was checked in `.build/SmartClip Test.app` in Dark Mode:
 - Sensitive content remains masked in accessibility labels.
 - Mark as regular opens a confirmation before revealing the synthetic value.
 - Settings open and the suggested shortcut can be registered in the test instance.
-- Escape in the search field hides the history window.
+- Escape clears an active search first; a second Escape hides the history window.
+- History, preview, and settings switch inside one reusable window.
+- Space opens the selected entry in a full preview; Escape closes the preview first.
+- Sensitive preview content starts masked and is masked again after closing and reopening.
+- Cmd-F focuses search while normal opening leaves the field unfocused.
+- The first 100 entries load immediately and the remaining page loads explicitly without duplicates.
+- Storage usage, quota selection, keep-favorites cleanup, and the sensitive-storage policy are exposed in Settings.
 
 Computer control sometimes activated the additional SwiftUI settings window after hiding the panel. This is not complete proof of global reopening, minimizing, or window-position persistence; those remain in the manual checklist.
 
@@ -80,10 +89,10 @@ These require an interactive Mac and the relevant permissions. They are not mark
 ## Known limits
 
 - Browser page metadata is not inspected. SmartClip shows the estimated source app and the copied URL when available.
-- JSON, color, and IP actions, statistics, synchronization, Developer ID signing, notarization, and public distribution are outside this beta.
+- JSON, color, and IP actions, synchronization, Developer ID signing, and notarization are outside this release.
 - Retention removes SmartClip entries, not plaintext already placed on the system clipboard.
 - SmartClip does not claim universal password detection or forensic deletion from SSDs and backups.
-- `swift test` is blocked here because the active Command Line Tools do not provide XCTest. The shared checks run through the debug executable; the XCTest integration requires full Xcode.
+- The shared checks run through the debug executable. The XCTest integration still requires a compatible full Xcode installation.
 
 ## Run the tests
 
@@ -110,3 +119,4 @@ SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX26.5.sdk swift run SmartC
 - **Unsigned release package, October 20, 2026:** package verification checks the read-only DMG, Applications link, minimum version, architecture, ad hoc signature, checksum, and expected Gatekeeper rejection.
 - **Release controls, October 20, 2026:** expanded to 113 checks. Delete all history requires confirmation, removes every entry, and preserves settings and the system clipboard. About SmartClip shows version, requirements, local processing, and documentation links.
 - **History responsiveness, October 30, 2026:** expanded to 114 checks. Unchanged history refreshes no longer publish another list update; search focus and row rendering were checked in the local test app.
+- **History store and workflow upgrade, November 7, 2026:** expanded to 120 checks. SQLite and encryption run behind an actor-isolated store; coverage now includes stable pagination, storage quota and statistics, keep-favorites cleanup, sensitive-content opt-out, preview selection, and safe drag representations.
