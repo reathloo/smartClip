@@ -30,16 +30,18 @@ func renderDesignPreviews() async throws {
                                      sourceName: first.sourceName, sourceBundleID: first.sourceBundleID,
                                      isSensitive: first.isSensitive, isPinned: true, copyCount: first.copyCount,
                                      preview: first.preview, hasMissingFiles: first.hasMissingFiles,
-                                     codeLanguage: first.codeLanguage, favoriteName: "Apple Design")
+                                     codeLanguage: first.codeLanguage, favoriteName: "Apple Design",
+                                     note: "Reference for the next macOS interaction pass.", hasNote: true)
     }
-    for dark in [false, true] {
-        let scheme: ColorScheme = dark ? .dark : .light
-        let suffix = dark ? "dark" : "light"
-        model.darkMode = dark
+    for mode in AppearanceMode.allCases {
+        let scheme = mode.colorScheme
+        let suffix = mode.rawValue
+        model.appearanceMode = mode
+        model.darkMode = mode != .light
         model.cardView = false
         try await snapshot(HistoryView(model: model), size: NSSize(width: 600, height: 680),
                            scheme: scheme, to: output.appendingPathComponent("history-\(suffix).png"))
-        if !dark {
+        if mode == .light {
             model.cardView = true
             try await snapshot(HistoryView(model: model), size: NSSize(width: 600, height: 680),
                                scheme: scheme, to: output.appendingPathComponent("cards-light.png"))
@@ -48,6 +50,7 @@ func renderDesignPreviews() async throws {
         try await snapshot(SettingsView(model: model), size: NSSize(width: 760, height: 660),
                            scheme: scheme, to: output.appendingPathComponent("settings-\(suffix).png"))
     }
+    model.appearanceMode = .light
     model.darkMode = false
     try await snapshot(SettingsView(model: model, initialTab: .history), size: NSSize(width: 760, height: 660),
                        scheme: .light, to: output.appendingPathComponent("retention-light.png"))
@@ -70,8 +73,10 @@ func renderDesignPreviews() async throws {
                        scheme: .light, to: output.appendingPathComponent("search-empty-compact.png"))
     model.search = ""
     model.pauseUntilRestart()
+    model.appearanceMode = .midnight
+    model.darkMode = true
     try await snapshot(HistoryView(model: model), size: NSSize(width: 560, height: 540),
-                       scheme: .dark, to: output.appendingPathComponent("paused-dark-compact.png"))
+                       scheme: .dark, to: output.appendingPathComponent("paused-midnight-compact.png"))
     print("Design previews: \(output.path)")
 }
 

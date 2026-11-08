@@ -31,6 +31,7 @@ struct SettingsView: View {
     @State private var confirmDeleteAll = false
     @State private var confirmDeleteUnpinned = false
     @AppStorage("SUAutomaticallyUpdate") private var automaticallyInstallUpdates = true
+    private var theme: ClipPalette { ClipTheme.palette(for: model.appearanceMode) }
 
     init(model: AppModel, initialTab: SettingsTab = .general) {
         self.model = model
@@ -73,12 +74,13 @@ struct SettingsView: View {
                 .padding(.horizontal, 30).padding(.vertical, 26)
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .background(ClipTheme.canvas)
+            .background(theme.canvas)
         }
-        .tint(ClipTheme.accent)
-        .background(ClipTheme.canvas)
+        .tint(theme.accent)
+        .background(theme.canvas)
         .frame(minWidth: 700, minHeight: 580)
-        .preferredColorScheme(model.darkMode ? .dark : .light)
+        .preferredColorScheme(model.appearanceMode.colorScheme)
+        .environment(\.clipPalette, theme)
         .environment(\.locale, Locale(identifier: "en_US"))
         .alert("Delete all history?", isPresented: $confirmDeleteAll) {
             Button("Delete all", role: .destructive) { model.deleteAllHistory() }
@@ -103,9 +105,9 @@ struct SettingsView: View {
                     .lineLimit(1)
                     .fixedSize(horizontal: true, vertical: false)
                 Spacer()
-                AppearanceToggle(isDark: model.darkMode) {
+                AppearancePicker(mode: model.appearanceMode) { mode in
                     withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.2)) {
-                        model.setDarkMode(!model.darkMode)
+                        model.setAppearanceMode(mode)
                     }
                 }
             }
@@ -129,8 +131,8 @@ struct SettingsView: View {
                         .font(.system(size: 12, weight: tab == item ? .semibold : .regular))
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.horizontal, 11).padding(.vertical, 10)
-                        .foregroundStyle(tab == item ? ClipTheme.accent : Color.primary.opacity(0.75))
-                        .background(tab == item ? ClipTheme.selection : .clear,
+                        .foregroundStyle(tab == item ? theme.accent : Color.primary.opacity(0.75))
+                        .background(tab == item ? theme.selection : .clear,
                                     in: RoundedRectangle(cornerRadius: 9, style: .continuous))
                 }
                 .buttonStyle(ResponsiveButtonStyle()).accessibilityAddTraits(tab == item ? .isSelected : [])
@@ -149,9 +151,9 @@ struct SettingsView: View {
         .frame(width: 210)
         .frame(maxHeight: .infinity)
         .background {
-            if reduceTransparency { ClipTheme.sidebar } else { Rectangle().fill(.thinMaterial) }
+            if reduceTransparency { theme.sidebar } else { Rectangle().fill(.thinMaterial) }
         }
-        .overlay(alignment: .trailing) { Rectangle().fill(ClipTheme.line).frame(width: 1) }
+        .overlay(alignment: .trailing) { Rectangle().fill(theme.line).frame(width: 1) }
     }
 
     private var generalSettings: some View {
@@ -165,14 +167,14 @@ struct SettingsView: View {
                     Spacer()
                     Text(model.shortcut?.display ?? "Not set")
                         .font(.system(size: 14, weight: .medium, design: .monospaced))
-                        .foregroundStyle(model.shortcut == nil ? Color.secondary : ClipTheme.accent)
+                        .foregroundStyle(model.shortcut == nil ? Color.secondary : theme.accent)
                         .padding(.horizontal, 12).padding(.vertical, 9)
-                        .background(ClipTheme.accent.opacity(0.07), in: RoundedRectangle(cornerRadius: 7))
+                        .background(theme.accent.opacity(0.07), in: RoundedRectangle(cornerRadius: 7))
                 }
                 ShortcutRecorder(model: model).frame(height: 37)
                 HStack(spacing: 12) {
                     Button("Use ⌘⇧V") { model.setShortcut(.suggested) }
-                        .buttonStyle(.plain).font(.system(size: 11)).foregroundStyle(ClipTheme.accent)
+                        .buttonStyle(.plain).font(.system(size: 11)).foregroundStyle(theme.accent)
                     Text("Recommended").font(.system(size: 10)).foregroundStyle(.tertiary)
                     Spacer()
                     if model.shortcut != nil {
@@ -187,10 +189,10 @@ struct SettingsView: View {
                               value: Binding(get: { model.autoPaste }, set: { model.setAutoPaste($0) }))
                 Text("Requires Accessibility permission. Without it, the entry is only copied.")
                     .font(.system(size: 11)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-                Divider().overlay(ClipTheme.line)
+                Divider().overlay(theme.line)
                 settingToggle("Launch at login", detail: "SmartClip waits in your menu bar.",
                               value: Binding(get: { model.autoStartEnabled }, set: { model.setAutoStart($0) }))
-                Divider().overlay(ClipTheme.line)
+                Divider().overlay(theme.line)
                 settingToggle("Install updates automatically", detail: "Downloads trusted SmartClip releases and installs them when the app restarts.",
                               value: $automaticallyInstallUpdates)
             }
@@ -218,7 +220,7 @@ struct SettingsView: View {
                 .buttonStyle(.borderedProminent).controlSize(.large)
         }
         .padding(18).frame(maxWidth: .infinity, alignment: .leading)
-        .background(ClipTheme.accent.opacity(0.07), in: RoundedRectangle(cornerRadius: 12))
+        .background(theme.accent.opacity(0.07), in: RoundedRectangle(cornerRadius: 12))
     }
 
     private var historySettings: some View {
@@ -243,7 +245,7 @@ struct SettingsView: View {
                     if model.storageLimitBytes > 0 {
                         ProgressView(value: min(1, Double(model.storageStatistics.contentBytes)
                                                 / Double(max(1, model.storageLimitBytes))))
-                            .tint(model.storageStatistics.contentBytes > model.storageLimitBytes ? .orange : ClipTheme.accent)
+                            .tint(model.storageStatistics.contentBytes > model.storageLimitBytes ? .orange : theme.accent)
                     }
                     Text("Disk usage: \(formatBytes(model.storageStatistics.diskBytes)). Pinned entries are never removed automatically.")
                         .font(.system(size: 11)).foregroundStyle(.secondary)
@@ -316,7 +318,7 @@ struct SettingsView: View {
     private var privacySettings: some View {
         VStack(spacing: 18) {
             HStack(alignment: .top, spacing: 12) {
-                Image(systemName: "lock.shield").font(.system(size: 23, weight: .light)).foregroundStyle(ClipTheme.accent)
+                Image(systemName: "lock.shield").font(.system(size: 23, weight: .light)).foregroundStyle(theme.accent)
                 VStack(alignment: .leading, spacing: 5) {
                     Text("Local. Encrypted. Private.").font(.system(size: 14, weight: .semibold))
                     Text("Your content is stored encrypted on this Mac. SmartClip needs no account or cloud service.")
@@ -324,7 +326,7 @@ struct SettingsView: View {
                 }
             }
             .padding(18).frame(maxWidth: .infinity, alignment: .leading)
-            .background(ClipTheme.accent.opacity(0.065), in: RoundedRectangle(cornerRadius: 12))
+            .background(theme.accent.opacity(0.065), in: RoundedRectangle(cornerRadius: 12))
             SettingsCard("Sensitive content", symbol: "eye.slash") {
                 settingToggle("Store sensitive entries",
                               detail: "When disabled, password-manager and detected card-number copies are never added to SmartClip.",
@@ -390,14 +392,14 @@ struct SettingsView: View {
                 Divider()
                 settingRow("Processing", detail: "No account, cloud service, or telemetry.") {
                     Label("Local", systemImage: "checkmark.shield")
-                        .font(.system(size: 11, weight: .medium)).foregroundStyle(ClipTheme.accent)
+                        .font(.system(size: 11, weight: .medium)).foregroundStyle(theme.accent)
                 }
             }
 
             SettingsCard("Links", symbol: "link") {
                 Button { model.onCheckForUpdates?() } label: {
                     HStack(spacing: 12) {
-                        Image(systemName: "arrow.triangle.2.circlepath").foregroundStyle(ClipTheme.accent).frame(width: 18)
+                        Image(systemName: "arrow.triangle.2.circlepath").foregroundStyle(theme.accent).frame(width: 18)
                         VStack(alignment: .leading, spacing: 3) {
                             Text("Check for updates").font(.system(size: 12, weight: .medium)).foregroundStyle(.primary)
                             Text("Look for a newer signed SmartClip release.").font(.system(size: 11)).foregroundStyle(.secondary)
@@ -424,7 +426,7 @@ struct SettingsView: View {
     private func aboutLink(_ title: String, detail: String, symbol: String, url: String) -> some View {
         Link(destination: URL(string: url)!) {
             HStack(spacing: 12) {
-                Image(systemName: symbol).foregroundStyle(ClipTheme.accent).frame(width: 18)
+                Image(systemName: symbol).foregroundStyle(theme.accent).frame(width: 18)
                 VStack(alignment: .leading, spacing: 3) {
                     Text(title).font(.system(size: 12, weight: .medium)).foregroundStyle(.primary)
                     Text(detail).font(.system(size: 11)).foregroundStyle(.secondary)
@@ -507,6 +509,7 @@ enum AppInfo {
 }
 
 private struct SettingsCard<Content: View>: View {
+    @Environment(\.clipPalette) private var theme
     let title: String
     let symbol: String
     @ViewBuilder let content: Content
@@ -524,8 +527,8 @@ private struct SettingsCard<Content: View>: View {
             content
         }
         .padding(18).frame(maxWidth: .infinity, alignment: .leading)
-        .background(ClipTheme.surface, in: RoundedRectangle(cornerRadius: 13, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 13, style: .continuous).strokeBorder(ClipTheme.line))
+        .background(theme.surface, in: RoundedRectangle(cornerRadius: 13, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 13, style: .continuous).strokeBorder(theme.line))
         .shadow(color: .black.opacity(0.035), radius: 8, y: 3)
     }
 }
@@ -537,5 +540,7 @@ private struct ShortcutRecorder: NSViewRepresentable {
         view.onShortcut = { [weak model] shortcut in model?.setShortcut(shortcut) }
         return view
     }
-    func updateNSView(_ nsView: ShortcutRecorderView, context: Context) {}
+    func updateNSView(_ nsView: ShortcutRecorderView, context: Context) {
+        nsView.accentColor = model.appearanceMode.accentNSColor
+    }
 }

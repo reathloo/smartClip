@@ -3,8 +3,11 @@ import Combine
 import SwiftUI
 
 struct ClipPreviewView: View {
+    @Environment(\.clipPalette) private var theme
     let item: ClipSummary
     let loadPayload: (UUID) async -> ClipPayload?
+    let loadNote: (UUID) async -> String?
+    let saveNote: (String) async -> Bool
     let onClose: () -> Void
     let onCopy: () -> Void
     var onOpen: (() -> Void)?
@@ -13,20 +16,33 @@ struct ClipPreviewView: View {
     @State private var payload: ClipPayload?
     @State private var isLoading = false
     @State private var revealedSensitive = false
+    @State private var savedNote = ""
+    @State private var noteDraft = ""
+    @State private var editingNote = false
+    @State private var isSavingNote = false
+    @State private var sensitiveLoadTask: Task<Void, Never>?
     @AccessibilityFocusState private var headerFocused: Bool
 
     var body: some View {
         VStack(spacing: 0) {
             header
-            Divider().overlay(ClipTheme.line)
-            content
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-            Divider().overlay(ClipTheme.line)
+            Divider().overlay(theme.line)
+            VStack(spacing: 0) {
+                content
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                if !item.isSensitive || revealedSensitive {
+                    Divider().overlay(theme.line)
+                    noteSection
+                }
+            }
+            Divider().overlay(theme.line)
             footer
         }
-        .background(ClipTheme.canvas)
+        .background(theme.canvas)
         .transition(.opacity)
         .task(id: item.id) {
+            savedNote = item.note ?? ""
+            noteDraft = savedNote
             guard !item.isSensitive else { return }
             await load()
         }
@@ -49,9 +65,9 @@ struct ClipPreviewView: View {
 
             Image(systemName: item.isSensitive ? "lock.fill" : item.kind.symbol)
                 .font(.system(size: 16, weight: .medium))
-                .foregroundStyle(item.isSensitive ? Color.orange : item.kind.color)
+                .foregroundStyle(item.isSensitive ? Color.orange : item.kind.color(in: theme))
                 .frame(width: 34, height: 34)
-                .background((item.isSensitive ? Color.orange : item.kind.color).opacity(0.09),
+                .background((item.isSensitive ? Color.orange : item.kind.color(in: theme)).opacity(0.09),
                             in: RoundedRectangle(cornerRadius: 9, style: .continuous))
                 .accessibilityHidden(true)
 
@@ -84,7 +100,7 @@ struct ClipPreviewView: View {
         }
         .padding(.horizontal, 18)
         .frame(height: 64)
-        .background(ClipTheme.surface.opacity(0.96))
+        .background(theme.surface.opacity(0.96))
     }
 
     @ViewBuilder private var content: some View {
@@ -126,6 +142,68 @@ struct ClipPreviewView: View {
         .padding(32)
     }
 
+    private var noteSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Label("Note", systemImage: "note.text")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(savedNote.isEmpty ? Color.secondary : theme.accent)
+                Spacer()
+                if !editingNote {
+                    Button(savedNote.isEmpty ? "Add note" : "Edit") {
+                        noteDraft = savedNote
+                        editingNote = true
+                    }
+                    .buttonStyle(.plain)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(theme.accent)
+                }
+            }
+            if editingNote {
+                TextEditor(text: $noteDraft)
+                    .font(.system(size: 12))
+                    .scrollContentBackground(.hidden)
+                    .padding(7)
+                    .frame(minHeight: 72, maxHeight: 110)
+                    .background(theme.canvas, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(theme.line))
+                    .onChange(of: noteDraft) { _, value in
+                        if value.count > ClipNote.maximumCharacters {
+                            noteDraft = String(value.prefix(ClipNote.maximumCharacters))
+                        }
+                    }
+                HStack {
+                    Text("\(noteDraft.count)/\(ClipNote.maximumCharacters)")
+                        .font(.system(size: 9, design: .monospaced))
+                        .foregroundStyle(.tertiary)
+                    Spacer()
+                    Button("Cancel") {
+                        noteDraft = savedNote
+                        editingNote = false
+                    }
+                    .buttonStyle(.plain)
+                    Button(savedNote.isEmpty ? "Save note" : "Save") { persistNote() }
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.small)
+                        .disabled(isSavingNote)
+                }
+            } else if savedNote.isEmpty {
+                Text("Add context without changing what gets copied or dragged.")
+                    .font(.system(size: 10))
+                    .foregroundStyle(.secondary)
+            } else {
+                Text(savedNote)
+                    .font(.system(size: 12))
+                    .lineSpacing(3)
+                    .textSelection(.enabled)
+                    .lineLimit(4)
+            }
+        }
+        .padding(.horizontal, 18)
+        .padding(.vertical, 12)
+        .background(theme.surface.opacity(0.96))
+    }
+
     @ViewBuilder private func payloadView(_ payload: ClipPayload) -> some View {
         switch payload.kind {
         case .text, .code, .url, .email:
@@ -137,7 +215,7 @@ struct ClipPreviewView: View {
                     .frame(maxWidth: .infinity, alignment: .topLeading)
                     .padding(22)
             }
-            .background(ClipTheme.surface)
+            .background(theme.surface)
         case .image:
             if let data = payload.imageData {
                 AsyncClipImage(data: data)
@@ -186,7 +264,7 @@ struct ClipPreviewView: View {
         let exists = FileManager.default.fileExists(atPath: path)
         return HStack(spacing: 11) {
             Image(systemName: exists ? "doc" : "exclamationmark.triangle")
-                .foregroundStyle(exists ? item.kind.color : Color.orange)
+                .foregroundStyle(exists ? item.kind.color(in: theme) : Color.orange)
                 .frame(width: 24)
             VStack(alignment: .leading, spacing: 3) {
                 Text(URL(fileURLWithPath: path).lastPathComponent)
@@ -206,8 +284,8 @@ struct ClipPreviewView: View {
             }
         }
         .padding(12)
-        .background(ClipTheme.surface, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(ClipTheme.line))
+        .background(theme.surface, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(theme.line))
         .accessibilityElement(children: .combine)
     }
 
@@ -230,7 +308,7 @@ struct ClipPreviewView: View {
         .foregroundStyle(.secondary)
         .padding(.horizontal, 18)
         .frame(height: 42)
-        .background(ClipTheme.surface.opacity(0.96))
+        .background(theme.surface.opacity(0.96))
     }
 
     private var metadataLabel: String {
@@ -239,27 +317,63 @@ struct ClipPreviewView: View {
     }
 
     private func reveal() {
+        sensitiveLoadTask?.cancel()
         revealedSensitive = true
-        Task { await load() }
+        sensitiveLoadTask = Task { await load() }
     }
 
     @MainActor private func load() async {
         guard payload == nil, !isLoading else { return }
         isLoading = true
+        defer { isLoading = false }
         let loaded = await loadPayload(item.id)
-        guard !Task.isCancelled else { return }
+        guard ClipPreviewLoadPolicy.canApply(isSensitive: item.isSensitive,
+                                             revealedSensitive: revealedSensitive,
+                                             taskCancelled: Task.isCancelled) else { return }
+        let note = await loadNote(item.id)
+        guard ClipPreviewLoadPolicy.canApply(isSensitive: item.isSensitive,
+                                             revealedSensitive: revealedSensitive,
+                                             taskCancelled: Task.isCancelled) else { return }
         payload = loaded
-        isLoading = false
+        savedNote = note ?? ""
+        if !editingNote { noteDraft = savedNote }
+    }
+
+    private func persistNote() {
+        guard !isSavingNote else { return }
+        isSavingNote = true
+        Task { @MainActor in
+            let normalized = ClipNote.normalized(noteDraft) ?? ""
+            if await saveNote(normalized) {
+                savedNote = normalized
+                noteDraft = normalized
+                editingNote = false
+            }
+            isSavingNote = false
+        }
     }
 
     private func conceal() {
+        sensitiveLoadTask?.cancel()
+        sensitiveLoadTask = nil
         payload = nil
         isLoading = false
         revealedSensitive = false
+        if item.isSensitive {
+            savedNote = ""
+            noteDraft = ""
+            editingNote = false
+        }
     }
 
     private func close() {
         conceal()
         onClose()
+    }
+}
+
+enum ClipPreviewLoadPolicy {
+    static func canApply(isSensitive: Bool, revealedSensitive: Bool, taskCancelled: Bool) -> Bool {
+        !taskCancelled && (!isSensitive || revealedSensitive)
     }
 }

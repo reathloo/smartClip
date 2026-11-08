@@ -7,6 +7,7 @@ struct HistoryView: View {
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @FocusState private var searchFocused: Bool
     @State private var searchText = ""
+    private var theme: ClipPalette { ClipTheme.palette(for: model.appearanceMode) }
 
     private var selectedItem: ClipSummary? {
         guard let id = HistoryNavigation.selected(in: model.items.map(\.id), explicit: model.selectedID, search: searchText) else { return nil }
@@ -19,6 +20,8 @@ struct HistoryView: View {
                 ClipPreviewView(
                     item: item,
                     loadPayload: { await model.loadPayload(for: $0) },
+                    loadNote: { await model.loadNote(for: $0) },
+                    saveNote: { await model.saveNote($0, for: item) },
                     onClose: { model.closePreview() },
                     onCopy: { model.copy(item) },
                     onOpen: item.kind == .url ? { model.openURL(item) } : nil
@@ -45,10 +48,11 @@ struct HistoryView: View {
                 footer
             }
         }
-        .tint(ClipTheme.accent)
-        .background(ClipTheme.canvas)
+        .tint(theme.accent)
+        .background(theme.canvas)
         .frame(minWidth: 560, minHeight: 540)
-        .preferredColorScheme(model.darkMode ? .dark : .light)
+        .preferredColorScheme(model.appearanceMode.colorScheme)
+        .environment(\.clipPalette, theme)
         .environment(\.locale, Locale(identifier: "en_US"))
         .onChange(of: model.items.map(\.id)) { _, ids in
             if let selectedID = model.selectedID, !ids.contains(selectedID) { model.selectedID = nil }
@@ -87,7 +91,7 @@ struct HistoryView: View {
     }
 
     @ViewBuilder private var chromeBackground: some View {
-        if reduceTransparency { ClipTheme.surface } else { Rectangle().fill(.ultraThinMaterial) }
+        if reduceTransparency { theme.surface } else { Rectangle().fill(.ultraThinMaterial) }
     }
 
     private var header: some View {
@@ -103,8 +107,8 @@ struct HistoryView: View {
                 viewButton("Cards", symbol: "rectangle.grid.1x2", cards: true)
             }
             .padding(3)
-            .background(ClipTheme.subtleFill, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
-            AppearanceToggle(isDark: model.darkMode) { setDarkMode(!model.darkMode) }
+            .background(theme.subtleFill, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+            AppearancePicker(mode: model.appearanceMode) { setAppearanceMode($0) }
             Button { model.onOpenSettings?() } label: { Image(systemName: "gearshape") }
                 .buttonStyle(IconControlStyle()).help("Settings")
                 .accessibilityLabel("Open settings")
@@ -112,17 +116,17 @@ struct HistoryView: View {
         .padding(.horizontal, 20).padding(.top, 16).padding(.bottom, 14)
     }
 
-    private func setDarkMode(_ value: Bool) {
-        withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.2)) { model.setDarkMode(value) }
+    private func setAppearanceMode(_ mode: AppearanceMode) {
+        withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.2)) { model.setAppearanceMode(mode) }
     }
 
     private func viewButton(_ title: String, symbol: String, cards: Bool) -> some View {
         Button { model.setCardView(cards) } label: {
             Image(systemName: symbol)
                 .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(model.cardView == cards ? ClipTheme.accent : Color.secondary)
+                .foregroundStyle(model.cardView == cards ? theme.accent : Color.secondary)
                 .frame(width: 30, height: 25)
-                .background(model.cardView == cards ? ClipTheme.surface : .clear,
+                .background(model.cardView == cards ? theme.surface : .clear,
                             in: RoundedRectangle(cornerRadius: 6))
         }
         .buttonStyle(ResponsiveButtonStyle()).help(title).accessibilityLabel(title)
@@ -158,11 +162,11 @@ struct HistoryView: View {
             }
         }
         .padding(.horizontal, 12).frame(height: 38)
-        .background(ClipTheme.surface.opacity(reduceTransparency ? 1 : 0.82),
+        .background(theme.surface.opacity(reduceTransparency ? 1 : 0.82),
                     in: RoundedRectangle(cornerRadius: 10, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous)
-            .strokeBorder(searchFocused ? ClipTheme.accent.opacity(0.45) : ClipTheme.line))
-        .shadow(color: searchFocused ? ClipTheme.accent.opacity(0.08) : .clear, radius: 5)
+            .strokeBorder(searchFocused ? theme.accent.opacity(0.45) : theme.line))
+        .shadow(color: searchFocused ? theme.accent.opacity(0.08) : .clear, radius: 5)
     }
 
     private var filters: some View {
@@ -187,7 +191,7 @@ struct HistoryView: View {
             }
             .padding(.horizontal, 10).padding(.vertical, 6)
             .foregroundStyle(active ? Color.white : Color.secondary)
-            .background(active ? ClipTheme.accent : .clear,
+            .background(active ? theme.accentFill : .clear,
                         in: RoundedRectangle(cornerRadius: 8, style: .continuous))
         }
         .buttonStyle(ResponsiveButtonStyle()).accessibilityAddTraits(active ? .isSelected : [])
@@ -248,9 +252,9 @@ struct HistoryView: View {
         }
         return VStack(spacing: 12) {
             Image(systemName: symbol)
-                .font(.system(size: 27, weight: .light)).foregroundStyle(ClipTheme.accent)
+                .font(.system(size: 27, weight: .light)).foregroundStyle(theme.accent)
                 .frame(width: 66, height: 66)
-                .background(ClipTheme.accent.opacity(0.08), in: RoundedRectangle(cornerRadius: 19))
+                .background(theme.accent.opacity(0.08), in: RoundedRectangle(cornerRadius: 19))
                 .accessibilityHidden(true)
             Text(title).font(.system(size: 15, weight: .semibold))
             Text(message).font(.system(size: 12)).foregroundStyle(.secondary)
@@ -292,7 +296,7 @@ struct HistoryView: View {
                 .padding(.horizontal, 20).padding(.vertical, 9)
             }
             HStack(spacing: 7) {
-                Circle().fill(model.captureState == .active ? ClipTheme.accent : Color.orange)
+                Circle().fill(model.captureState == .active ? theme.accent : Color.orange)
                     .frame(width: 6, height: 6).accessibilityHidden(true)
                 Text(model.captureStatusLabel)
                     .font(.system(size: 11)).foregroundStyle(.secondary)
@@ -359,11 +363,13 @@ struct HistoryView: View {
 }
 
 private struct ClipRow: View {
+    @Environment(\.clipPalette) private var theme
     let model: AppModel
     let snapshot: ClipSummary
     // Lazy rows may retain their identity when moving between sections. Resolve
     // actions and labels from the current model instead of the old row snapshot.
     private var item: ClipSummary { model.item(for: snapshot.id) ?? snapshot }
+    private var dragState: ClipRowDragState { ClipRowDragState(item: item) }
     let card: Bool
     let selected: Bool
     let onPreview: () -> Void
@@ -380,15 +386,15 @@ private struct ClipRow: View {
                 HStack(alignment: .top, spacing: 12) {
                     Image(systemName: item.isSensitive ? "lock" : item.kind.symbol)
                         .font(.system(size: 15, weight: .medium))
-                        .foregroundStyle(item.isSensitive ? Color.orange : item.kind.color)
+                        .foregroundStyle(item.isSensitive ? Color.orange : item.kind.color(in: theme))
                         .frame(width: 36, height: 36)
-                        .background((item.isSensitive ? Color.orange : item.kind.color).opacity(0.09),
+                        .background((item.isSensitive ? Color.orange : item.kind.color(in: theme)).opacity(0.09),
                                     in: RoundedRectangle(cornerRadius: 10))
                     VStack(alignment: .leading, spacing: 7) {
                         if let favoriteName = item.favoriteName {
                             Label(favoriteName, systemImage: "pin.fill")
                                 .font(.system(size: 11, weight: .semibold))
-                                .foregroundStyle(ClipTheme.accent)
+                                .foregroundStyle(theme.accent)
                                 .lineLimit(1)
                         }
                         if item.isSensitive {
@@ -398,7 +404,7 @@ private struct ClipRow: View {
                             if item.kind == .code {
                                 Text(item.codeLanguage ?? "Unknown language")
                                     .font(.system(size: 10, weight: .semibold))
-                                    .foregroundStyle(ClipKind.code.color)
+                                    .foregroundStyle(ClipKind.code.color(in: theme))
                                     .help("Language estimated automatically from syntax")
                             }
                             Text(item.preview.isEmpty ? item.kind.label : item.preview)
@@ -408,6 +414,13 @@ private struct ClipRow: View {
                         }
                         if card && item.kind == .image && !item.isSensitive {
                             ClipImagePreview(model: model, id: item.id)
+                        }
+                        if item.hasNote {
+                            Label(item.isSensitive ? "Encrypted note" : item.note ?? "Note",
+                                  systemImage: "note.text")
+                                .font(.system(size: 10, weight: .medium))
+                                .foregroundStyle(.secondary)
+                                .lineLimit(card ? 2 : 1)
                         }
                         HStack(spacing: 5) {
                             SourceAppIcon(bundleID: item.sourceBundleID, size: 13)
@@ -429,11 +442,11 @@ private struct ClipRow: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(ResponsiveButtonStyle())
-            .accessibilityLabel("\(item.favoriteName.map { "\($0), " } ?? "")\(item.kind.label): \(item.isSensitive ? "sensitive entry" : item.preview)")
+            .accessibilityLabel("\(item.favoriteName.map { "\($0), " } ?? "")\(item.kind.label): \(item.isSensitive ? "sensitive entry" : item.preview)\(item.hasNote ? ", has note" : "")")
             .accessibilityAddTraits(selected ? .isSelected : [])
             VStack(alignment: .trailing, spacing: 7) {
                 HStack(spacing: 2) {
-                    if dragFileURLs.count > 1 {
+                    if dragState.allowsFileURLs, dragFileURLs.count > 1 {
                         MultiFileDragHandle(urls: dragFileURLs)
                             .frame(width: 24, height: 24)
                     }
@@ -451,7 +464,7 @@ private struct ClipRow: View {
                             .font(.system(size: 11)).frame(width: 24, height: 24)
                     }
                     .buttonStyle(IconControlStyle())
-                    .foregroundStyle(item.isPinned ? ClipTheme.accent : Color.secondary)
+                    .foregroundStyle(item.isPinned ? theme.accent : Color.secondary)
                     .opacity(item.isPinned || hovered || selected ? 1 : 0.65)
                     .help(item.isPinned ? "Unpin" : "Pin")
                     .accessibilityLabel(item.isPinned ? "Unpin entry" : "Pin entry")
@@ -464,17 +477,19 @@ private struct ClipRow: View {
         }
         .padding(card ? 15 : 12)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(selected ? ClipTheme.selection
-                    : card ? ClipTheme.surface : hovered ? ClipTheme.surface.opacity(0.72) : .clear,
+        .background(selected ? theme.selection
+                    : card ? theme.surface : hovered ? theme.surface.opacity(0.72) : .clear,
                     in: RoundedRectangle(cornerRadius: 12, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
-            .strokeBorder(selected ? ClipTheme.accent.opacity(0.34) : card ? ClipTheme.line : .clear))
+            .strokeBorder(selected ? theme.accent.opacity(0.34) : card ? theme.line : .clear))
         .shadow(color: card ? .black.opacity(0.035) : .clear, radius: 5, y: 2)
         .onHover { hovered = $0 }
         .modifier(ClipDragModifier(model: model, item: item))
-        .task(id: item.id) {
-            guard item.kind == .files, !item.isSensitive, !item.hasMissingFiles,
+        .task(id: dragState) {
+            dragFileURLs = []
+            guard dragState.allowsFileURLs,
                   let paths = await model.loadPayload(for: item.id)?.filePaths else { return }
+            guard dragState == ClipRowDragState(item: item) else { return }
             dragFileURLs = paths.map { URL(fileURLWithPath: $0) }
                 .filter { FileManager.default.fileExists(atPath: $0.path) }
         }
@@ -513,6 +528,7 @@ private struct ClipRow: View {
             if item.favoriteName != nil {
                 Button("Remove favorite name", systemImage: "tag.slash") { model.nameFavorite(item, "") }
             }
+            Button(item.hasNote ? "View note" : "Add note …", systemImage: "note.text") { onPreview() }
             Button(item.isSensitive ? "Mark as regular" : "Mark as sensitive", systemImage: "lock") {
                 if item.isSensitive { confirmUnmark = true }
                 else { model.markSensitive(item, true) }
@@ -577,6 +593,24 @@ private struct ClipRow: View {
             Label("No automatic deletion", systemImage: "infinity")
                 .font(.system(size: 10)).foregroundStyle(.secondary)
         }
+    }
+}
+
+struct ClipRowDragState: Hashable {
+    let id: UUID
+    let kind: ClipKind
+    let isSensitive: Bool
+    let hasMissingFiles: Bool
+
+    init(item: ClipSummary) {
+        id = item.id
+        kind = item.kind
+        isSensitive = item.isSensitive
+        hasMissingFiles = item.hasMissingFiles
+    }
+
+    var allowsFileURLs: Bool {
+        kind == .files && !isSensitive && !hasMissingFiles
     }
 }
 

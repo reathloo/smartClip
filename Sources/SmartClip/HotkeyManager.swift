@@ -64,6 +64,9 @@ private func smartClipHotkeyHandler(_ next: EventHandlerCallRef?, _ event: Event
 
 final class ShortcutRecorderView: NSView {
     var onShortcut: ((Shortcut) -> Void)?
+    var accentColor = AppearanceMode.light.accentNSColor {
+        didSet { needsDisplay = true }
+    }
     private var recording = false
     private let label = NSTextField(labelWithString: "Record custom shortcut")
 
@@ -89,7 +92,7 @@ final class ShortcutRecorderView: NSView {
     override var wantsUpdateLayer: Bool { true }
     override func updateLayer() {
         let dark = effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
-        layer?.borderColor = recording ? NSColor(srgbRed: 0.2, green: 0.55, blue: 0.48, alpha: 1).cgColor
+        layer?.borderColor = recording ? accentColor.cgColor
             : NSColor(white: dark ? 0.28 : 0.85, alpha: 1).cgColor
         layer?.backgroundColor = NSColor(white: dark ? 0.15 : 0.975, alpha: 1).cgColor
     }

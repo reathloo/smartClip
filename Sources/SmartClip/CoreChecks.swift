@@ -293,6 +293,31 @@ func runCoreChecks() async throws {
         try f.db.setFavoriteName(nil, for: id)
         try expect(try f.row().favoriteName == nil, "Favorite name was not removed")
     }
+    integration("database.encrypted-note-search-conceal-and-dedup") { f in
+        let note = "Review this during the encrypted-note acceptance pass"
+        try f.capture(.text("annotated content"))
+        let id = try f.row().id
+        try f.db.setNote(note, for: id)
+        try f.capture(.text("annotated content"), at: f.time.addingTimeInterval(10))
+        var annotated = try f.db.list(search: "acceptance pass").first
+        try expect(annotated?.id == id && annotated?.note == note && annotated?.hasNote == true,
+                   "Encrypted note was not searchable or did not survive deduplication")
+        try expect(try f.db.note(for: id) == note, "Full note could not be loaded")
+        for name in ["history.sqlite", "history.sqlite-wal"] {
+            let data = try Data(contentsOf: f.directory.appendingPathComponent(name))
+            try expect(data.range(of: Data(note.utf8)) == nil, "Note stored as plaintext")
+        }
+        try f.db.setSensitive(true, for: id)
+        annotated = try f.db.list().first
+        try expect(annotated?.hasNote == true && annotated?.note == nil,
+                   "Sensitive note was exposed in history summaries")
+        try expect(try f.db.list(search: "acceptance pass").isEmpty,
+                   "Sensitive note was exposed through search")
+        try expect(try f.db.note(for: id) == note, "Sensitive note was not available for explicit reveal")
+        try f.db.setNote("   ", for: id)
+        try expect(try f.db.note(for: id) == nil && f.db.list().first?.hasNote == false,
+                   "Empty note was not removed")
+    }
     test("database.favorite-name-migrates-existing-history") {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent("SmartClipMigration-\(UUID())")
         let path = directory.appendingPathComponent("history.sqlite").path
@@ -321,7 +346,8 @@ func runCoreChecks() async throws {
         while sqlite3_step(statement) == SQLITE_ROW {
             columns.insert(String(cString: sqlite3_column_text(statement, 1)))
         }
-        try expect(columns.contains("favorite_name") && columns.contains("retention_seconds"),
+        try expect(columns.contains("favorite_name") && columns.contains("retention_seconds")
+                   && columns.contains("note"),
                    "Existing database did not receive new columns")
     }
     integration("database.search-filter-limit-and-mask") { f in
@@ -420,10 +446,14 @@ func runCoreChecks() async throws {
         f.model.setSensitiveSeconds(300); f.model.setExcluded("  test.excluded  ", excluded: true)
         f.model.setExcluded("   ", excluded: true); f.model.setMonitoring(true)
         let reloaded = AppModel(defaults: f.defaults, pasteboard: f.pasteboard)
-        try expect(reloaded.cardView && reloaded.darkMode && reloaded.isPaused && reloaded.onboardingComplete,
+        try expect(reloaded.cardView && reloaded.darkMode && reloaded.appearanceMode == .midnight
+                   && reloaded.isPaused && reloaded.onboardingComplete,
                    "Settings not persisted")
         try expect(reloaded.normalDays == 90 && reloaded.sensitiveSeconds == 300, "Retention not persisted")
         try expect(reloaded.excludedBundles == ["test.excluded"], "Exclusions not trimmed/persisted")
+        reloaded.setAppearanceMode(.forest)
+        let themed = AppModel(defaults: f.defaults, pasteboard: f.pasteboard)
+        try expect(themed.appearanceMode == .forest && themed.darkMode, "Appearance theme not persisted")
         f.model.setExcluded("test.excluded", excluded: false)
         try expect(f.model.excludedBundles.isEmpty, "Unexclude failed")
     }
@@ -536,6 +566,22 @@ func runCoreChecks() async throws {
         f.model.pin(row)
         row = try f.row()
         try expect(!row.isPinned && row.favoriteName == nil, "Unpinning kept an orphaned favorite name")
+    }
+    await asyncIntegration("model.encrypted-note-save-load-and-remove") { f in
+        try f.capture(.text("note target")); f.model.refresh()
+        let row = try f.row()
+        let saved = await f.model.saveNote("  Context for later  ", for: row)
+        try expect(saved, "Model did not save note")
+        try expect(try f.row().note == "Context for later", "Model did not normalize or refresh note")
+        let loaded = await f.model.loadNote(for: row.id)
+        try expect(loaded == "Context for later", "Model did not load note")
+        f.model.copy(try f.row())
+        let copied = try f.read().0.text
+        try expect(copied == "note target", "Copy included the note or changed the original payload")
+        let removed = await f.model.saveNote("\n\t", for: try f.row())
+        try expect(removed, "Model did not remove note")
+        let cleared = try f.row()
+        try expect(cleared.note == nil && !cleared.hasNote, "Removed note remained visible")
     }
     integration("database.corrupted-payload-rejected") { f in
         try f.capture(.text("authenticated record"))
@@ -921,6 +967,33 @@ func runCoreChecks() async throws {
         try Data("b".utf8).write(to: second)
         let providers = ClipDragProvider.fileProviders(for: .files([first.path, second.path]))
         try expect(providers.count == 2, "Multi-file drag did not create one provider per file")
+
+        let regularFiles = ClipSummary(id: UUID(), kind: .files, lastCopiedAt: f.time, sourceName: nil,
+                                       sourceBundleID: nil, isSensitive: false, isPinned: false,
+                                       copyCount: 1, preview: "2 files", hasMissingFiles: false)
+        var dragState = ClipRowDragState(item: regularFiles)
+        try expect(dragState.allowsFileURLs, "Regular multi-file entry did not allow file URLs")
+        let concealedFiles = ClipSummary(id: regularFiles.id, kind: .files, lastCopiedAt: f.time,
+                                         sourceName: nil, sourceBundleID: nil, isSensitive: true,
+                                         isPinned: false, copyCount: 1, preview: "••••••••",
+                                         hasMissingFiles: false)
+        dragState = ClipRowDragState(item: concealedFiles)
+        try expect(!dragState.allowsFileURLs,
+                   "Marking a loaded file entry sensitive did not revoke its cached drag URLs")
+    }
+    test("preview-sensitive-load-policy") {
+        try expect(ClipPreviewLoadPolicy.canApply(isSensitive: false, revealedSensitive: false,
+                                                  taskCancelled: false),
+                   "Regular preview load was unexpectedly rejected")
+        try expect(ClipPreviewLoadPolicy.canApply(isSensitive: true, revealedSensitive: true,
+                                                  taskCancelled: false),
+                   "Revealed sensitive preview load was unexpectedly rejected")
+        try expect(!ClipPreviewLoadPolicy.canApply(isSensitive: true, revealedSensitive: false,
+                                                   taskCancelled: false),
+                   "Concealed sensitive preview accepted a delayed load result")
+        try expect(!ClipPreviewLoadPolicy.canApply(isSensitive: true, revealedSensitive: true,
+                                                   taskCancelled: true),
+                   "Cancelled sensitive preview accepted a delayed load result")
     }
     integration("model-preview-and-keyboard-selection-state") { f in
         try f.capture(.text("first"), at: f.time)
