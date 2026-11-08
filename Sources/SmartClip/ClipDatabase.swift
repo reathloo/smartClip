@@ -44,6 +44,7 @@ final class ClipDatabase: @unchecked Sendable {
                 pinned INTEGER NOT NULL DEFAULT 0,
                 copy_count INTEGER NOT NULL DEFAULT 1,
                 favorite_name BLOB,
+                note BLOB,
                 retention_seconds INTEGER,
                 payload BLOB NOT NULL
             )
@@ -53,6 +54,9 @@ final class ClipDatabase: @unchecked Sendable {
         }
         if try !hasColumn("retention_seconds", in: "clips") {
             try execute("ALTER TABLE clips ADD COLUMN retention_seconds INTEGER")
+        }
+        if try !hasColumn("note", in: "clips") {
+            try execute("ALTER TABLE clips ADD COLUMN note BLOB")
         }
         try execute("CREATE INDEX IF NOT EXISTS clips_order ON clips(pinned DESC, last_copied DESC)")
     }
@@ -150,12 +154,12 @@ final class ClipDatabase: @unchecked Sendable {
         let sql: String
         if cursor == nil {
             sql = """
-                SELECT id, kind, last_copied, source_name, source_bundle, sensitive, pinned, copy_count, payload, favorite_name, retention_seconds
+                SELECT id, kind, last_copied, source_name, source_bundle, sensitive, pinned, copy_count, payload, favorite_name, retention_seconds, note
                 FROM clips ORDER BY pinned DESC, last_copied DESC, id DESC
                 """
         } else {
             sql = """
-                SELECT id, kind, last_copied, source_name, source_bundle, sensitive, pinned, copy_count, payload, favorite_name, retention_seconds
+                SELECT id, kind, last_copied, source_name, source_bundle, sensitive, pinned, copy_count, payload, favorite_name, retention_seconds, note
                 FROM clips
                 WHERE pinned < ? OR (pinned = ? AND (last_copied < ? OR (last_copied = ? AND id < ?)))
                 ORDER BY pinned DESC, last_copied DESC, id DESC
@@ -189,6 +193,13 @@ final class ClipDatabase: @unchecked Sendable {
             } else {
                 favoriteName = nil
             }
+            let sealedNote = columnData(stmt, 11)
+            let note: String?
+            if !sensitive, let sealedNote {
+                note = String(data: try crypto.open(sealedNote), encoding: .utf8)
+            } else {
+                note = nil
+            }
             var preview = sensitive ? "••••••••" : rowKind == .image ? "Image" : ""
             var missing = false
             let sourceMatches = sourceName?.localizedCaseInsensitiveContains(needle) == true
@@ -204,6 +215,7 @@ final class ClipDatabase: @unchecked Sendable {
             }
             if let kind = query.kind, kind != displayKind { continue }
             if !needle.isEmpty && !sourceMatches && favoriteName?.localizedCaseInsensitiveContains(needle) != true
+                && note?.localizedCaseInsensitiveContains(needle) != true
                 && !preview.localizedCaseInsensitiveContains(needle)
                 && codeLanguage?.localizedCaseInsensitiveContains(needle) != true { continue }
             results.append(ClipSummary(
@@ -213,6 +225,7 @@ final class ClipDatabase: @unchecked Sendable {
                 isSensitive: sensitive, isPinned: sqlite3_column_int(stmt, 6) != 0,
                 copyCount: Int(sqlite3_column_int(stmt, 7)), preview: preview,
                 hasMissingFiles: missing, codeLanguage: codeLanguage, favoriteName: favoriteName,
+                note: note, hasNote: sealedNote != nil,
                 retentionOverrideSeconds: sqlite3_column_type(stmt, 10) == SQLITE_NULL
                     ? nil : Int(sqlite3_column_int64(stmt, 10))
             ))
@@ -233,6 +246,14 @@ final class ClipDatabase: @unchecked Sendable {
         guard try nextRow(stmt) else { return nil }
         guard let sealed = columnData(stmt, 0) else { throw DatabaseError.invalidRecord }
         return try PropertyListDecoder().decode(ClipPayload.self, from: crypto.open(sealed))
+    }
+
+    func note(for id: UUID) throws -> String? {
+        let stmt = try prepare("SELECT note FROM clips WHERE id=?")
+        defer { sqlite3_finalize(stmt) }
+        bind(id.uuidString, to: 1, in: stmt)
+        guard try nextRow(stmt), let sealed = columnData(stmt, 0) else { return nil }
+        return String(data: try crypto.open(sealed), encoding: .utf8)
     }
 
     func setPinned(_ pinned: Bool, for id: UUID) throws { try setFlag("pinned", value: pinned, id: id) }
@@ -257,6 +278,17 @@ final class ClipDatabase: @unchecked Sendable {
         let stmt = try prepare("UPDATE clips SET favorite_name=? WHERE id=?")
         defer { sqlite3_finalize(stmt) }
         if let name { bind(try crypto.seal(Data(name.utf8)), to: 1, in: stmt) }
+        else { sqlite3_bind_null(stmt, 1) }
+        bind(id.uuidString, to: 2, in: stmt)
+        guard sqlite3_step(stmt) == SQLITE_DONE else { throw DatabaseError.sqlite(message()) }
+    }
+
+    func setNote(_ note: String?, for id: UUID) throws {
+        let stmt = try prepare("UPDATE clips SET note=? WHERE id=?")
+        defer { sqlite3_finalize(stmt) }
+        if let note = note.flatMap(ClipNote.normalized) {
+            bind(try crypto.seal(Data(note.utf8)), to: 1, in: stmt)
+        }
         else { sqlite3_bind_null(stmt, 1) }
         bind(id.uuidString, to: 2, in: stmt)
         guard sqlite3_step(stmt) == SQLITE_DONE else { throw DatabaseError.sqlite(message()) }
@@ -340,7 +372,7 @@ final class ClipDatabase: @unchecked Sendable {
     func statistics() throws -> StorageStatistics {
         let stmt = try prepare("""
             SELECT COUNT(*),
-                   COALESCE(SUM(length(payload) + COALESCE(length(favorite_name), 0)), 0),
+                   COALESCE(SUM(length(payload) + COALESCE(length(favorite_name), 0) + COALESCE(length(note), 0)), 0),
                    COALESCE(SUM(CASE WHEN pinned != 0 THEN 1 ELSE 0 END), 0)
             FROM clips
             """)
@@ -365,7 +397,7 @@ final class ClipDatabase: @unchecked Sendable {
             var bytesToRemove = max(0, stats.contentBytes - safeLimit)
             if bytesToRemove > 0 {
                 let candidates = try prepare("""
-                    SELECT id, length(payload) + COALESCE(length(favorite_name), 0)
+                    SELECT id, length(payload) + COALESCE(length(favorite_name), 0) + COALESCE(length(note), 0)
                     FROM clips WHERE pinned=0 ORDER BY last_copied ASC, id ASC
                     """)
                 defer { sqlite3_finalize(candidates) }

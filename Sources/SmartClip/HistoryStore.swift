@@ -63,12 +63,14 @@ actor HistoryStore {
     }
 
     func payload(for id: UUID) throws -> ClipPayload? { try database.payload(for: id) }
+    func note(for id: UUID) throws -> String? { try database.note(for: id) }
     func setPinned(_ pinned: Bool, for id: UUID) throws { try database.setPinned(pinned, for: id) }
     func setSensitive(_ sensitive: Bool, for id: UUID) throws { try database.setSensitive(sensitive, for: id) }
     func setRetentionOverride(seconds: Int?, for id: UUID) throws {
         try database.setRetentionOverride(seconds: seconds, for: id)
     }
     func setFavoriteName(_ name: String?, for id: UUID) throws { try database.setFavoriteName(name, for: id) }
+    func setNote(_ note: String?, for id: UUID) throws { try database.setNote(note, for: id) }
     func delete(_ id: UUID) throws { try database.delete(id) }
     func deleteAll() throws -> Int { try database.deleteAll() }
     func deleteUnpinned() throws -> Int { try database.deleteUnpinned() }

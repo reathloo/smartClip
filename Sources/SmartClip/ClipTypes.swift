@@ -108,6 +108,8 @@ struct ClipSummary: Identifiable, Equatable, Sendable {
     let hasMissingFiles: Bool
     var codeLanguage: String? = nil
     var favoriteName: String? = nil
+    var note: String? = nil
+    var hasNote: Bool = false
     var retentionOverrideSeconds: Int? = nil
 
     func deletionDate(normalDays: Int?, sensitiveSeconds: TimeInterval) -> Date? {
@@ -115,6 +117,16 @@ struct ClipSummary: Identifiable, Equatable, Sendable {
                            sensitiveSeconds: sensitiveSeconds,
                            overrideSeconds: retentionOverrideSeconds)
             .map { lastCopiedAt.addingTimeInterval($0) }
+    }
+}
+
+enum ClipNote {
+    static let maximumCharacters = 4_000
+
+    static func normalized(_ value: String) -> String? {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        return String(trimmed.prefix(maximumCharacters))
     }
 }
 
