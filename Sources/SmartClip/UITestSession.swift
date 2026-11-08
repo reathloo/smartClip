@@ -38,6 +38,10 @@ final class UITestSession {
         }
         let first = try db.list()[0]
         try db.setPinned(true, for: first.id)
+        try db.setNote("Reference for the next SmartClip release.", for: first.id)
+        if let sensitive = try db.list(search: "Test Password Manager").first {
+            try db.setNote("This note must stay concealed until reveal.", for: sensitive.id)
+        }
         try db.capture(.files([directory.appendingPathComponent("missing-file.txt").path]),
                        sourceName: "Finder", sourceBundleID: nil, sensitive: false)
         model.setMonitoring(true)

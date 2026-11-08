@@ -20,6 +20,7 @@ final class AppModel: ObservableObject {
     @Published var filter: ClipKind?
     @Published var cardView: Bool
     @Published var darkMode: Bool
+    @Published var appearanceMode: AppearanceMode
     @Published var statusMessage = ""
     @Published private(set) var recoveryAction: RecoveryAction?
     @Published private(set) var pauseMode: PauseMode
@@ -84,7 +85,10 @@ final class AppModel: ObservableObject {
         self.systemIntegrationsEnabled = systemIntegrationsEnabled
         self.lastChangeCount = pasteboard.changeCount
         cardView = defaults.bool(forKey: "cardView")
-        darkMode = defaults.object(forKey: "darkMode") as? Bool ?? false
+        let initialAppearance = defaults.string(forKey: "appearanceMode").flatMap(AppearanceMode.init(rawValue:))
+            ?? (defaults.bool(forKey: "darkMode") ? .midnight : .light)
+        appearanceMode = initialAppearance
+        darkMode = initialAppearance != .light
         pauseMode = defaults.bool(forKey: "paused") ? .manual : .active
         recoveryAction = nil
         normalDays = defaults.object(forKey: "normalDays") as? Int ?? 30
@@ -408,6 +412,43 @@ final class AppModel: ObservableObject {
         } catch {
             showStatus(error.localizedDescription)
             return nil
+        }
+    }
+
+    func loadNote(for id: UUID) async -> String? {
+        do {
+            if let database { return try database.note(for: id) }
+            return try await historyStore?.note(for: id)
+        } catch {
+            showStatus(error.localizedDescription)
+            return nil
+        }
+    }
+
+    @discardableResult
+    func saveNote(_ value: String, for item: ClipSummary) async -> Bool {
+        let note = ClipNote.normalized(value)
+        do {
+            if let database {
+                try database.setNote(note, for: item.id)
+                if storageLimitBytes > 0 { _ = try database.enforceQuota(bytes: storageLimitBytes) }
+                refresh()
+            } else if let historyStore {
+                try await historyStore.setNote(note, for: item.id)
+                if storageLimitBytes > 0 { _ = try await historyStore.enforceQuota(bytes: storageLimitBytes) }
+                await refreshHistory(reset: true)
+            } else {
+                return false
+            }
+            guard self.item(for: item.id) != nil else {
+                showStatus("The entry was removed because the storage limit was reached.")
+                return false
+            }
+            showStatus(note == nil ? "Note removed." : "Encrypted note saved.")
+            return true
+        } catch {
+            showStatus(error.localizedDescription)
+            return false
         }
     }
 
@@ -739,7 +780,13 @@ final class AppModel: ObservableObject {
         }
     }
     func setCardView(_ value: Bool) { cardView = value; defaults.set(value, forKey: "cardView") }
-    func setDarkMode(_ value: Bool) { darkMode = value; defaults.set(value, forKey: "darkMode") }
+    func setDarkMode(_ value: Bool) { setAppearanceMode(value ? .midnight : .light) }
+    func setAppearanceMode(_ mode: AppearanceMode) {
+        appearanceMode = mode
+        darkMode = mode != .light
+        defaults.set(mode.rawValue, forKey: "appearanceMode")
+        defaults.set(darkMode, forKey: "darkMode")
+    }
     func setNormalDays(_ value: Int) {
         normalDays = value; defaults.set(value, forKey: "normalDays")
         if database != nil { try? purge(); refresh() }
