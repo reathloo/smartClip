@@ -1,12 +1,12 @@
 # SmartClip Test Report and Reproducible Verification
 
-Last updated: November 7, 2026.
+Last updated: November 8, 2026.
 
 ## Result
 
-Run the automated suite with `zsh scripts/test.sh`. It contains **120 named checks** with multiple assertions. Machine-readable results are written to `.build/test-results/core.json`; console output is written to `.build/test-results/core.log`.
+Run the automated suite with `zsh scripts/test.sh`. It contains **123 named checks** with multiple assertions. Machine-readable results are written to `.build/test-results/core.json`; console output is written to `.build/test-results/core.log`.
 
-The initial 54-check run reproduced five failures. All five were fixed, and later integration coverage expanded the suite. UI checks are separate and are not counted among the 120 automated checks.
+The initial 54-check run reproduced five failures. All five were fixed, and later integration coverage expanded the suite. UI checks are separate and are not counted among the 123 automated checks.
 
 Tests use random temporary databases, isolated UserDefaults suites, named private pasteboards, and generated keys. They do not read real clipboard history or access the real Keychain. The shortcut check temporarily registers ⌃⌥⇧⌘F18/F19 and releases both combinations afterward. It fails with an explanation if another process already owns either shortcut.
 
@@ -33,7 +33,7 @@ Sensitive values receive a ConcealedType marker when copied. Hotkey handlers and
 | Files | Multiple original references, missing originals, round trip, clipboard preserved on failure | Finder end-to-end check remains manual |
 | Encryption | Empty, small, and 1 MiB payloads; random nonces; wrong key; tampering; truncated data | No independent security audit |
 | Storage | Every type in SQLite, reopen, encrypted content in DB and WAL, corrupt record | Type, time, and app name metadata remain unencrypted |
-| Duplicates and favorites | Text, image, and file groups; count, time, source, pin, encrypted name, search | UI ordering also checked interactively |
+| Duplicates, favorites, and notes | Text, image, and file groups; count, time, source, pin, encrypted names and notes, search | UI ordering also checked interactively |
 | Search and filters | Content and app name, case handling, type filter, limit, results beyond first page | Sensitive plaintext intentionally excluded from search |
 | Retention | Every preset at its exact boundary, never, favorites, recopy, setting changes, expired retrieval | Controlled time rather than a multi-day real-time run |
 | Capture | Onboarding, manual and timed pauses, restart pause, changeCount, exclusions, denied access, self-copy suppression | Operating-system permission state is simulated |
@@ -51,7 +51,7 @@ Sensitive values receive a ConcealedType marker when copied. Hotkey handlers and
 
 The following behavior was checked in `.build/SmartClip Test.app`:
 
-- Searching for the sample note returns exactly one result.
+- Adding and editing an entry note updates the preview; searching for the saved note returns exactly one result.
 - Search plus Enter keeps the history open; selecting with ↓ changes Enter to Copy.
 - Text filtering shows regular and masked sensitive entries.
 - List and card views preserve selection and update layout.
@@ -62,7 +62,7 @@ The following behavior was checked in `.build/SmartClip Test.app`:
 - Escape clears an active search first; a second Escape hides the history window.
 - History, preview, and settings switch inside one reusable window.
 - Space opens the selected entry in a full preview; Escape closes the preview first.
-- Sensitive preview content starts masked and is masked again after closing and reopening.
+- Sensitive preview content and its note start masked, appear only after Reveal, and are masked again after closing and reopening.
 - Cmd-F focuses search while normal opening leaves the field unfocused.
 - The first 100 entries load immediately and the remaining page loads explicitly without duplicates.
 - Storage usage, quota selection, keep-favorites cleanup, and the sensitive-storage policy are exposed in Settings.
@@ -120,3 +120,4 @@ SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX26.5.sdk swift run SmartC
 - **Release controls, October 20, 2026:** expanded to 113 checks. Delete all history requires confirmation, removes every entry, and preserves settings and the system clipboard. About SmartClip shows version, requirements, local processing, and documentation links.
 - **History responsiveness, October 30, 2026:** expanded to 114 checks. Unchanged history refreshes no longer publish another list update; search focus and row rendering were checked in the local test app.
 - **History store and workflow upgrade, November 7, 2026:** expanded to 120 checks. SQLite and encryption run behind an actor-isolated store; coverage now includes stable pagination, storage quota and statistics, keep-favorites cleanup, sensitive-content opt-out, preview selection, and safe drag representations.
+- **Encrypted entry notes and concealment hardening, November 8, 2026:** expanded to 123 checks. Notes are encrypted independently, survive deduplication, participate in regular-entry search, stay concealed for sensitive entries, respect storage quotas, and are removed with their entry. Delayed preview loads and cached multi-file drag handles are revoked when sensitive content is concealed.

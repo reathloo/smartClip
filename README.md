@@ -35,7 +35,7 @@ service, telemetry, or remote processing.
 | --- | --- | --- |
 | Text, URLs, email, code, images, and file references | Search, filters, full preview, list and card views | Encrypted local payloads |
 | Duplicate handling and source-app estimate | Keyboard actions, drag-and-drop, and automatic paste | Sensitive-content masking or complete exclusion |
-| Missing-file detection and paged history | Named favorites and per-entry retention | Capture pauses and excluded apps |
+| Missing-file detection and paged history | Encrypted notes, named favorites, and per-entry retention | Capture pauses and excluded apps |
 | Automatic cleanup and storage limits | Menu-bar status and launch at login | Keep-favorites cleanup and no telemetry |
 
 > [!NOTE]
@@ -90,7 +90,7 @@ Useful commands:
 ```sh
 zsh scripts/run-dev.sh          # build and restart the real app
 zsh scripts/run-dev.sh --ui     # isolated UI preview with sample data
-zsh scripts/test.sh             # run all 120 core checks
+zsh scripts/test.sh             # run all 123 core checks
 zsh scripts/build-app.sh        # create dist/SmartClip.app
 ```
 
