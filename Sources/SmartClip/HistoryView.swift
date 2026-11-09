@@ -7,6 +7,7 @@ struct HistoryView: View {
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @FocusState private var searchFocused: Bool
     @State private var searchText = ""
+    @State private var showingRefinements = false
     private var theme: ClipPalette { ClipTheme.palette(for: model.appearanceMode) }
 
     private var selectedItem: ClipSummary? {
@@ -15,37 +16,42 @@ struct HistoryView: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            if let previewedID = model.previewedID, let item = model.item(for: previewedID) {
-                ClipPreviewView(
-                    item: item,
-                    loadPayload: { await model.loadPayload(for: $0) },
-                    loadNote: { await model.loadNote(for: $0) },
-                    saveNote: { await model.saveNote($0, for: item) },
-                    onClose: { model.closePreview() },
-                    onCopy: { model.copy(item) },
-                    onOpen: item.kind == .url ? { model.openURL(item) } : nil
-                )
-            } else {
-                topBar
-                if model.items.isEmpty {
-                    emptyState
+        ZStack {
+            VStack(spacing: 0) {
+                if let previewedID = model.previewedID, let item = model.item(for: previewedID) {
+                    ClipPreviewView(
+                        item: item,
+                        loadPayload: { await model.loadPayload(for: $0) },
+                        loadNote: { await model.loadNote(for: $0) },
+                        saveNote: { await model.saveNote($0, for: item) },
+                        onClose: { model.closePreview() },
+                        onCopy: { model.copy(item) },
+                        onOpen: item.kind == .url ? { model.openURL(item) } : nil
+                    )
                 } else {
-                    ScrollViewReader { proxy in
-                        ScrollView {
-                            LazyVStack(spacing: model.cardView ? 10 : 4) {
-                                entrySection("Pinned", pinned: true)
-                                entrySection("Recently copied", pinned: false)
-                                loadMoreSection
+                    topBar
+                    if model.items.isEmpty {
+                        emptyState
+                    } else {
+                        ScrollViewReader { proxy in
+                            ScrollView {
+                                LazyVStack(spacing: model.cardView ? 10 : 4) {
+                                    entrySection("Pinned", pinned: true)
+                                    entrySection("Recently copied", pinned: false)
+                                    loadMoreSection
+                                }
+                                .padding(.horizontal, 12).padding(.bottom, 14)
                             }
-                            .padding(.horizontal, 12).padding(.bottom, 14)
-                        }
-                        .onChange(of: model.selectedID) { _, id in
-                            if let id { proxy.scrollTo(id) }
+                            .onChange(of: model.selectedID) { _, id in
+                                if let id { proxy.scrollTo(id) }
+                            }
                         }
                     }
+                    footer
                 }
-                footer
+            }
+            if let message = model.copyConfirmationMessage {
+                copyConfirmation(message)
             }
         }
         .tint(theme.accent)
@@ -79,10 +85,37 @@ struct HistoryView: View {
         .animation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 1), value: model.filter)
     }
 
+    private func copyConfirmation(_ message: String) -> some View {
+        VStack(spacing: 10) {
+            Image(systemName: "checkmark.circle.fill")
+                .font(.system(size: 34, weight: .medium))
+                .foregroundStyle(theme.accent)
+            Text(message)
+                .font(.system(size: 17, weight: .semibold))
+        }
+        .padding(.horizontal, 30).padding(.vertical, 24)
+        .background(theme.surface.opacity(reduceTransparency ? 1 : 0.96),
+                    in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(theme.line))
+        .shadow(color: .black.opacity(0.2), radius: 18, y: 8)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(message)
+        .transition(reduceMotion ? .opacity : .scale(scale: 0.94).combined(with: .opacity))
+        .zIndex(10)
+    }
+
     private var topBar: some View {
         VStack(spacing: 0) {
             header
-            searchField.padding(.horizontal, 20)
+            HStack(spacing: 8) {
+                searchField
+                    .frame(maxWidth: .infinity)
+                    .layoutPriority(-1)
+                refinementMenu
+                    .fixedSize()
+                    .layoutPriority(1)
+            }
+            .padding(.horizontal, 20)
             filters.padding(.horizontal, 20).padding(.top, 11).padding(.bottom, 13)
         }
         .background { chromeBackground }
@@ -180,6 +213,85 @@ struct HistoryView: View {
         }
     }
 
+    private var refinementMenu: some View {
+        Button { showingRefinements.toggle() } label: {
+            Label("Filters", systemImage: model.hasActiveHistoryRefinements
+                  ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(model.hasActiveHistoryRefinements ? theme.accent : Color.secondary)
+                .padding(.horizontal, 9)
+                .frame(height: 28)
+                .background(theme.subtleFill, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .help("Refine history")
+        .accessibilityLabel(model.hasActiveHistoryRefinements ? "Refine history, filters active" : "Refine history")
+        .popover(isPresented: $showingRefinements, arrowEdge: .bottom) { refinementPanel }
+    }
+
+    private var refinementPanel: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Filter history").font(.system(size: 13, weight: .semibold))
+            refinementSection("Copied") {
+                ForEach(HistoryTimeFilter.allCases) { filter in
+                    refinementOption(filter.label, selected: model.timeFilter == filter) {
+                        model.timeFilter = filter
+                    }
+                }
+            }
+            refinementSection("Source app") {
+                refinementOption("All apps", selected: model.sourceBundleFilter == nil) {
+                    model.sourceBundleFilter = nil
+                }
+                ForEach(model.knownApps, id: \.0) { bundleID, name in
+                    refinementOption(name, selected: model.sourceBundleFilter == bundleID) {
+                        model.sourceBundleFilter = bundleID
+                    }
+                }
+            }
+            Divider()
+            refinementOption("Favorites only", selected: model.favoritesOnly) {
+                model.favoritesOnly.toggle()
+            }
+            if model.hasActiveHistoryRefinements {
+                Button("Clear refinements") {
+                    model.resetHistoryRefinements()
+                    showingRefinements = false
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(theme.accent)
+                .font(.system(size: 11, weight: .medium))
+            }
+        }
+        .padding(14)
+        .frame(width: 210)
+    }
+
+    private func refinementSection<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title).font(.system(size: 10, weight: .semibold)).foregroundStyle(.secondary)
+            content()
+        }
+    }
+
+    private func refinementOption(_ title: String, selected: Bool, action: @escaping () -> Void) -> some View {
+        Button {
+            action()
+            model.selectedID = nil
+            model.applySearchImmediately()
+        } label: {
+            HStack {
+                Text(title)
+                Spacer()
+                if selected { Image(systemName: "checkmark") }
+            }
+            .font(.system(size: 11))
+            .foregroundStyle(selected ? theme.accent : Color.primary)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
     private func filterButton(_ title: String, symbol: String, kind: ClipKind?) -> some View {
         let active = model.filter == kind
         return Button {
@@ -217,7 +329,7 @@ struct HistoryView: View {
     }
 
     private var emptyState: some View {
-        let searching = !searchText.isEmpty || model.filter != nil
+        let searching = !searchText.isEmpty || model.filter != nil || model.hasActiveHistoryRefinements
         let state = model.captureState
         let title: String
         let message: String
@@ -426,7 +538,7 @@ private struct ClipRow: View {
                             SourceAppIcon(bundleID: item.sourceBundleID, size: 13)
                             Text(item.sourceName ?? "Unknown app").help("Source app estimated at copy time")
                             Text("·").foregroundStyle(.tertiary)
-                            Text(item.lastCopiedAt, style: .relative)
+                            Text(item.firstCapturedAt ?? item.lastCopiedAt, style: .relative)
                             if item.hasMissingFiles {
                                 Image(systemName: "exclamationmark.triangle").foregroundStyle(.orange)
                                     .help("Original file is missing")

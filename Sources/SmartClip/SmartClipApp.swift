@@ -93,7 +93,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 userDriverDelegate: nil
             )
             updaterController = updater
-            model.onCheckForUpdates = { [weak updater] in updater?.checkForUpdates(nil) }
+            model.onCheckForUpdates = { [weak self, weak updater] in
+                // The floating history panel would otherwise cover Sparkle's update UI.
+                self?.panel?.orderOut(nil)
+                NSApp.activate(ignoringOtherApps: true)
+                updater?.checkForUpdates(nil)
+            }
         }
         model.onOpenHistory = { [weak self] in self?.toggleHistory() }
         model.onClosePanel = { [weak self] in self?.panel?.orderOut(nil) }
@@ -102,7 +107,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         item.button?.image = NSImage(systemSymbolName: "paperclip.circle", accessibilityDescription: "SmartClip")
         item.button?.target = self
         item.button?.action = #selector(handleStatusItemClick)
-        item.button?.sendAction(on: [.leftMouseUp, .rightMouseUp])
+        item.button?.sendAction(on: [.leftMouseUp])
         statusItem = item
         pauseObservation = model.$pauseMode.sink { [weak self] _ in self?.updateStatusItemAppearance() }
         if !model.onboardingComplete { showSettings() }
@@ -147,7 +152,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func resumeCapture() { model.setPaused(false) }
     @objc private func pauseFor15Minutes() { model.pause(for: 15 * 60) }
     @objc private func pauseUntilNextLaunch() { model.pauseUntilRestart() }
-    @objc private func checkForUpdates() { updaterController?.checkForUpdates(nil) }
+    @objc private func checkForUpdates() { model.onCheckForUpdates?() }
     @objc private func openSettingsFromMenu() { showSettings() }
     @objc private func quitFromMenu() { NSApp.terminate(nil) }
 

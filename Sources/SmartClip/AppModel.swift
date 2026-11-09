@@ -18,10 +18,14 @@ final class AppModel: ObservableObject {
     @Published var pendingDeleteID: UUID?
     @Published var focusSearchRequest = 0
     @Published var filter: ClipKind?
+    @Published var timeFilter: HistoryTimeFilter = .all
+    @Published var sourceBundleFilter: String?
+    @Published var favoritesOnly = false
     @Published var cardView: Bool
     @Published var darkMode: Bool
     @Published var appearanceMode: AppearanceMode
     @Published var statusMessage = ""
+    @Published private(set) var copyConfirmationMessage: String?
     @Published private(set) var recoveryAction: RecoveryAction?
     @Published private(set) var pauseMode: PauseMode
     @Published var shortcut: Shortcut?
@@ -41,7 +45,11 @@ final class AppModel: ObservableObject {
     @Published private(set) var storageStatistics = StorageStatistics.empty
 
     var isPaused: Bool { pauseMode.isPaused }
+    var accessibilityPermissionGranted: Bool { AXIsProcessTrusted() }
     var captureStatusLabel: String { isPaused ? pauseMode.label(now: now()) : captureState.label }
+    var hasActiveHistoryRefinements: Bool {
+        timeFilter != .all || sourceBundleFilter != nil || favoritesOnly
+    }
 
     var captureState: CaptureState {
         if !storageReady { return .unavailable }
@@ -66,6 +74,7 @@ final class AppModel: ObservableObject {
     private let defaults: UserDefaults
     private let pasteboard: NSPasteboard
     private let now: () -> Date
+    private let copyConfirmationDelay: TimeInterval
     private let systemIntegrationsEnabled: Bool
     private var lastChangeCount: Int
     var previousApp: NSRunningApplication?
@@ -76,12 +85,13 @@ final class AppModel: ObservableObject {
 
     init(defaults: UserDefaults = .standard, pasteboard: NSPasteboard = .general,
          database: ClipDatabase? = nil, now: @escaping () -> Date = { .now },
-         systemIntegrationsEnabled: Bool = true) {
+         systemIntegrationsEnabled: Bool = true, copyConfirmationDelay: TimeInterval = 0.7) {
         self.defaults = defaults
         self.pasteboard = pasteboard
         self.database = database
         self.storageReady = database != nil
         self.now = now
+        self.copyConfirmationDelay = copyConfirmationDelay
         self.systemIntegrationsEnabled = systemIntegrationsEnabled
         self.lastChangeCount = pasteboard.changeCount
         cardView = defaults.bool(forKey: "cardView")
@@ -287,7 +297,7 @@ final class AppModel: ObservableObject {
             return
         }
         do {
-            let page = try database.page(query: HistoryQuery(search: search, kind: filter),
+            let page = try database.page(query: historyQuery,
                                          after: nil, limit: historyPageSize)
             let refreshedItems = page.items
             historyCursor = page.nextCursor
@@ -322,7 +332,21 @@ final class AppModel: ObservableObject {
     func resetSearch() {
         search = ""
         filter = nil
+        resetHistoryRefinements(refresh: false)
         applySearchImmediately()
+    }
+
+    func resetHistoryRefinements(refresh: Bool = true) {
+        timeFilter = .all
+        sourceBundleFilter = nil
+        favoritesOnly = false
+        if refresh { applySearchImmediately() }
+    }
+
+    private var historyQuery: HistoryQuery {
+        HistoryQuery(search: search, kind: filter,
+                     copiedSince: timeFilter.startDate(now: now()),
+                     sourceBundleID: sourceBundleFilter, favoritesOnly: favoritesOnly)
     }
 
     func purge() throws {
@@ -351,13 +375,13 @@ final class AppModel: ObservableObject {
         }
         let generation = historyGeneration
         let cursor = reset ? nil : historyCursor
-        let query = HistoryQuery(search: search, kind: filter)
+        let query = historyQuery
         isLoadingHistory = true
         defer { if generation == historyGeneration { isLoadingHistory = false } }
         do {
             let page = try await historyStore.page(query, after: cursor, limit: historyPageSize)
             guard !Task.isCancelled, generation == historyGeneration,
-                  query == HistoryQuery(search: search, kind: filter) else { return }
+                  query == historyQuery else { return }
             if reset {
                 items = page.items
             } else {
@@ -378,7 +402,7 @@ final class AppModel: ObservableObject {
         guard hasMoreHistory, !isLoadingHistory else { return }
         if let database {
             do {
-                let page = try database.page(query: HistoryQuery(search: search, kind: filter),
+                let page = try database.page(query: historyQuery,
                                              after: historyCursor, limit: historyPageSize)
                 let existing = Set(items.map(\.id))
                 items.append(contentsOf: page.items.filter { !existing.contains($0.id) })
@@ -478,9 +502,7 @@ final class AppModel: ObservableObject {
             updatedHistory = false
             showStatus("Copied, but history could not be updated: \(error.localizedDescription)")
         }
-        onClosePanel?()
-        if updatedHistory { showStatus("Copied to the clipboard.") }
-        if autoPaste && systemIntegrationsEnabled { pasteIntoPreviousApp() }
+        finishCopy(updatedHistory ? "Copied!" : "Copied, but history could not be updated.")
     }
 
     private func copyFromStore(_ item: ClipSummary) async {
@@ -504,13 +526,24 @@ final class AppModel: ObservableObject {
                 sensitive: item.isSensitive, at: now(), quotaBytes: storageLimitBytes == 0 ? nil : storageLimitBytes
             )
             await refreshHistory(reset: true)
-            onClosePanel?()
-            showStatus("Copied to the clipboard.")
-            if autoPaste && systemIntegrationsEnabled { pasteIntoPreviousApp() }
+            finishCopy("Copied!")
         } catch {
-            onClosePanel?()
-            showStatus("Copied, but history could not be updated: \(error.localizedDescription)")
+            finishCopy("Copied, but history could not be updated: \(error.localizedDescription)")
         }
+    }
+
+    /// Keeps the confirmation visible before the compact panel dismisses.
+    private func finishCopy(_ message: String) {
+        showStatus(message)
+        copyConfirmationMessage = message
+        let close = { [weak self] in
+            guard let self else { return }
+            self.copyConfirmationMessage = nil
+            self.onClosePanel?()
+            if self.autoPaste && self.systemIntegrationsEnabled { self.pasteIntoPreviousApp() }
+        }
+        if copyConfirmationDelay == 0 { close() }
+        else { DispatchQueue.main.asyncAfter(deadline: .now() + copyConfirmationDelay, execute: close) }
     }
 
     private func writeToPasteboard(_ payload: ClipPayload, sensitive: Bool) -> Bool {
@@ -871,6 +904,15 @@ final class AppModel: ObservableObject {
     }
     var autoStartEnabled: Bool { SMAppService.mainApp.status == .enabled }
 
+    func checkPermissions() {
+        if accessibilityPermissionGranted {
+            showStatus("Permissions are ready. SmartClip can paste into the previous app.")
+        } else {
+            showStatus("Accessibility permission is needed for automatic paste.",
+                       recovery: .openAccessibilitySettings)
+        }
+    }
+
     func showStatus(_ message: String, recovery: RecoveryAction? = nil) {
         statusMessage = message
         recoveryAction = recovery
@@ -878,6 +920,10 @@ final class AppModel: ObservableObject {
 
     func performRecovery() {
         guard let action = recoveryAction else { return }
+        performRecoveryAction(action)
+    }
+
+    func performRecoveryAction(_ action: RecoveryAction) {
         switch action {
         case .retryStorage:
             Task { await start() }
