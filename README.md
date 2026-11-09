@@ -33,9 +33,9 @@ service, telemetry, or remote processing.
 
 | History | Workflow | Privacy and control |
 | --- | --- | --- |
-| Text, URLs, email, code, images, and file references | Search, filters, full preview, list and card views | Encrypted local payloads |
+| Text, URLs, email, code, images, and file references | Search by type, time, source app, and favorites | Encrypted local payloads |
 | Duplicate handling and source-app estimate | Keyboard actions, drag-and-drop, and automatic paste | Sensitive-content masking or complete exclusion |
-| Missing-file detection and paged history | Encrypted notes, named favorites, and per-entry retention | Capture pauses and excluded apps |
+| File type, size, and modification details in preview | Encrypted notes, named favorites, and per-entry retention | Capture pauses, permission checks, and excluded apps |
 | Automatic cleanup and storage limits | Menu-bar status and launch at login | Keep-favorites cleanup and no telemetry |
 
 > [!NOTE]
@@ -90,7 +90,7 @@ Useful commands:
 ```sh
 zsh scripts/run-dev.sh          # build and restart the real app
 zsh scripts/run-dev.sh --ui     # isolated UI preview with sample data
-zsh scripts/test.sh             # run all 123 core checks
+zsh scripts/test.sh             # run all 125 core checks
 zsh scripts/build-app.sh        # create dist/SmartClip.app
 ```
 
@@ -105,7 +105,7 @@ styled DMG, verifies the package, signs the update with Sparkle EdDSA, creates a
 GitHub Release, and publishes the appcast through GitHub Pages.
 
 ```sh
-zsh scripts/package-release.sh v0.3.0
+zsh scripts/package-release.sh v0.3.1
 ```
 
 See the [release guide](docs/RELEASE.md), [test report](docs/TEST_REPORT.md), and
