@@ -1,6 +1,35 @@
 import AppKit
 import Combine
 import SwiftUI
+import UniformTypeIdentifiers
+
+struct FilePreviewMetadata: Equatable {
+    let typeLabel: String?
+    let byteCount: Int64?
+    let modifiedAt: Date?
+
+    static func read(url: URL, fileManager: FileManager = .default) -> FilePreviewMetadata {
+        guard let attributes = try? fileManager.attributesOfItem(atPath: url.path) else {
+            return FilePreviewMetadata(typeLabel: nil, byteCount: nil, modifiedAt: nil)
+        }
+        let typeLabel = UTType(filenameExtension: url.pathExtension)?.localizedDescription ?? "File"
+        let byteCount = (attributes[.size] as? NSNumber)?.int64Value
+        let modifiedAt = attributes[.modificationDate] as? Date
+        return FilePreviewMetadata(typeLabel: typeLabel, byteCount: byteCount, modifiedAt: modifiedAt)
+    }
+
+    var detailLabel: String? {
+        var parts: [String] = []
+        if let typeLabel { parts.append(typeLabel) }
+        if let byteCount { parts.append(ByteCountFormatter.string(fromByteCount: byteCount, countStyle: .file)) }
+        if let modifiedAt {
+            parts.append("Modified " + modifiedAt.formatted(
+                Date.FormatStyle(date: .abbreviated, time: .shortened, locale: Locale(identifier: "en_US"))
+            ))
+        }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
+}
 
 struct ClipPreviewView: View {
     @Environment(\.clipPalette) private var theme
@@ -261,15 +290,23 @@ struct ClipPreviewView: View {
     }
 
     private func fileRow(_ path: String) -> some View {
-        let exists = FileManager.default.fileExists(atPath: path)
+        let url = URL(fileURLWithPath: path)
+        let metadata = FilePreviewMetadata.read(url: url)
+        let exists = metadata.byteCount != nil
         return HStack(spacing: 11) {
             Image(systemName: exists ? "doc" : "exclamationmark.triangle")
                 .foregroundStyle(exists ? item.kind.color(in: theme) : Color.orange)
                 .frame(width: 24)
             VStack(alignment: .leading, spacing: 3) {
-                Text(URL(fileURLWithPath: path).lastPathComponent)
+                Text(url.lastPathComponent)
                     .font(.system(size: 12, weight: .medium))
                     .lineLimit(1)
+                if let detail = metadata.detailLabel {
+                    Text(detail)
+                        .font(.system(size: 10))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
                 Text(path)
                     .font(.system(size: 10, design: .monospaced))
                     .foregroundStyle(.secondary)
@@ -313,7 +350,7 @@ struct ClipPreviewView: View {
 
     private var metadataLabel: String {
         let source = item.sourceName ?? "Unknown app"
-        return "\(source) · \(item.lastCopiedAt.formatted(.relative(presentation: .named)))"
+        return "\(source) · \((item.firstCapturedAt ?? item.lastCopiedAt).formatted(.relative(presentation: .named)))"
     }
 
     private func reveal() {
