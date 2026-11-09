@@ -138,6 +138,16 @@ struct SettingsView: View {
                 .buttonStyle(ResponsiveButtonStyle()).accessibilityAddTraits(tab == item ? .isSelected : [])
             }
             Spacer()
+            Button {
+                model.showingSettings = false
+            } label: {
+                Label("Back to clipboard", systemImage: "chevron.left")
+                    .font(.system(size: 11, weight: .medium))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 11).padding(.vertical, 9)
+            }
+            .buttonStyle(ResponsiveButtonStyle())
+            .accessibilityLabel("Back to clipboard")
             VStack(alignment: .leading, spacing: 5) {
                 Label("Only on this Mac", systemImage: "lock.shield")
                     .font(.system(size: 10, weight: .medium))
@@ -195,6 +205,26 @@ struct SettingsView: View {
                 Divider().overlay(theme.line)
                 settingToggle("Install updates automatically", detail: "Downloads trusted SmartClip releases and installs them when the app restarts.",
                               value: $automaticallyInstallUpdates)
+            }
+            SettingsCard("Permissions", symbol: "checkmark.shield") {
+                settingRow("Automatic paste", detail: model.accessibilityPermissionGranted
+                           ? "Accessibility access is available."
+                           : "Accessibility access is needed to paste into the previous app.") {
+                    Label(model.accessibilityPermissionGranted ? "Ready" : "Needs access",
+                          systemImage: model.accessibilityPermissionGranted ? "checkmark.circle.fill" : "exclamationmark.circle")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(model.accessibilityPermissionGranted ? theme.accent : Color.orange)
+                }
+                Divider().overlay(theme.line)
+                HStack(spacing: 12) {
+                    Button("Check permissions") { model.checkPermissions() }
+                    if !model.accessibilityPermissionGranted {
+                        Button("Open Accessibility Settings") { model.performRecoveryAction(.openAccessibilitySettings) }
+                    }
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .font(.system(size: 11, weight: .medium))
             }
             if model.onboardingComplete {
                 SettingsCard("Capture", symbol: "record.circle") {
