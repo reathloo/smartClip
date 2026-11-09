@@ -35,7 +35,7 @@ private final class Fixture {
         db = try ClipDatabase(path: directory.appendingPathComponent("history.sqlite").path, crypto: crypto)
         let time = time
         model = AppModel(defaults: defaults, pasteboard: pasteboard, database: db, now: { time },
-                         systemIntegrationsEnabled: false)
+                         systemIntegrationsEnabled: false, copyConfirmationDelay: 0)
     }
     func cleanup() {
         defaults.removePersistentDomain(forName: suite)
@@ -361,6 +361,33 @@ func runCoreChecks() async throws {
         try expect(try f.db.list(search: "secret-no-search").isEmpty, "Sensitive search exposed secret")
         try expect(try f.db.list(search: "Vault").first?.preview == "••••••••", "Sensitive preview unmasked")
         try expect(try f.db.knownApps().count == 1, "Source apps not deduplicated")
+    }
+    integration("database.refines-by-time-source-and-favorite-before-content") { f in
+        try f.capture(.text("old Safari"), at: f.time.addingTimeInterval(-31 * 86_400),
+                      source: "Safari", bundle: "com.apple.Safari")
+        try f.capture(.text("recent Safari"), source: "Safari", bundle: "com.apple.Safari")
+        try f.capture(.text("recent Terminal"), source: "Terminal", bundle: "com.apple.Terminal")
+        let safari = try f.db.list(search: "recent Safari")[0]
+        try f.db.setPinned(true, for: safari.id)
+
+        let recent = try f.db.page(query: HistoryQuery(copiedSince: f.time.addingTimeInterval(-86_400)),
+                                   after: nil, limit: 20).items
+        try expect(recent.count == 2 && !recent.contains(where: { $0.preview == "old Safari" }),
+                   "Time refinement included old content")
+        let terminal = try f.db.page(query: HistoryQuery(sourceBundleID: "com.apple.Terminal"),
+                                     after: nil, limit: 20).items
+        try expect(terminal.count == 1 && terminal.first?.sourceName == "Terminal", "Source refinement failed")
+        let favorites = try f.db.page(query: HistoryQuery(favoritesOnly: true), after: nil, limit: 20).items
+        try expect(favorites.count == 1 && favorites.first?.id == safari.id, "Favorite refinement failed")
+    }
+    integration("file-preview-metadata-is-local-and-complete") { f in
+        let url = f.directory.appendingPathComponent("notes.txt")
+        try Data("hello".utf8).write(to: url)
+        let metadata = FilePreviewMetadata.read(url: url)
+        try expect(metadata.byteCount == 5 && metadata.modifiedAt != nil,
+                   "File preview metadata did not read local attributes")
+        try expect(metadata.typeLabel?.isEmpty == false && metadata.detailLabel?.contains("5 bytes") == true,
+                   "File preview metadata is incomplete")
     }
     integration("database.retention-refresh-delete") { f in
         try f.capture(.text("old"), at: f.time.addingTimeInterval(-31 * 86_400))

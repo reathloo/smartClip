@@ -3,6 +3,36 @@ import Foundation
 struct HistoryQuery: Sendable, Equatable {
     var search: String = ""
     var kind: ClipKind?
+    var copiedSince: Date?
+    var sourceBundleID: String?
+    var favoritesOnly = false
+}
+
+enum HistoryTimeFilter: String, CaseIterable, Identifiable, Sendable, Equatable {
+    case all
+    case today
+    case week
+    case month
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .all: "Any time"
+        case .today: "Today"
+        case .week: "Past 7 days"
+        case .month: "Past 30 days"
+        }
+    }
+
+    func startDate(now: Date, calendar: Calendar = .current) -> Date? {
+        switch self {
+        case .all: nil
+        case .today: calendar.startOfDay(for: now)
+        case .week: calendar.date(byAdding: .day, value: -7, to: now)
+        case .month: calendar.date(byAdding: .day, value: -30, to: now)
+        }
+    }
 }
 
 struct HistoryCursor: Sendable, Equatable {

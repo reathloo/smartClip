@@ -106,6 +106,8 @@ struct ClipSummary: Identifiable, Equatable, Sendable {
     let copyCount: Int
     let preview: String
     let hasMissingFiles: Bool
+    /// First capture time for display; retention and ordering use `lastCopiedAt`.
+    var firstCapturedAt: Date? = nil
     var codeLanguage: String? = nil
     var favoriteName: String? = nil
     var note: String? = nil

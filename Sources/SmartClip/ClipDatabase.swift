@@ -154,12 +154,12 @@ final class ClipDatabase: @unchecked Sendable {
         let sql: String
         if cursor == nil {
             sql = """
-                SELECT id, kind, last_copied, source_name, source_bundle, sensitive, pinned, copy_count, payload, favorite_name, retention_seconds, note
+                SELECT id, kind, last_copied, source_name, source_bundle, sensitive, pinned, copy_count, payload, favorite_name, retention_seconds, note, created
                 FROM clips ORDER BY pinned DESC, last_copied DESC, id DESC
                 """
         } else {
             sql = """
-                SELECT id, kind, last_copied, source_name, source_bundle, sensitive, pinned, copy_count, payload, favorite_name, retention_seconds, note
+                SELECT id, kind, last_copied, source_name, source_bundle, sensitive, pinned, copy_count, payload, favorite_name, retention_seconds, note, created
                 FROM clips
                 WHERE pinned < ? OR (pinned = ? AND (last_copied < ? OR (last_copied = ? AND id < ?)))
                 ORDER BY pinned DESC, last_copied DESC, id DESC
@@ -181,6 +181,12 @@ final class ClipDatabase: @unchecked Sendable {
             if Task.isCancelled { throw CancellationError() }
             guard let idString = columnString(stmt, 0), let id = UUID(uuidString: idString),
                   let kindString = columnString(stmt, 1), let rowKind = ClipKind(rawValue: kindString) else { continue }
+            let copiedAt = Date(timeIntervalSince1970: sqlite3_column_double(stmt, 2))
+            let sourceBundleID = columnString(stmt, 4)
+            let isPinned = sqlite3_column_int(stmt, 6) != 0
+            if let copiedSince = query.copiedSince, copiedAt < copiedSince { continue }
+            if let requiredBundleID = query.sourceBundleID, sourceBundleID != requiredBundleID { continue }
+            if query.favoritesOnly && !isPinned { continue }
             // Old text rows can become code on read; other types cannot change.
             if let kind = query.kind, rowKind != kind, !(rowKind == .text && kind == .code) { continue }
             var displayKind = rowKind
@@ -220,11 +226,13 @@ final class ClipDatabase: @unchecked Sendable {
                 && codeLanguage?.localizedCaseInsensitiveContains(needle) != true { continue }
             results.append(ClipSummary(
                 id: id, kind: displayKind,
-                lastCopiedAt: Date(timeIntervalSince1970: sqlite3_column_double(stmt, 2)),
-                sourceName: sourceName, sourceBundleID: columnString(stmt, 4),
-                isSensitive: sensitive, isPinned: sqlite3_column_int(stmt, 6) != 0,
+                lastCopiedAt: copiedAt,
+                sourceName: sourceName, sourceBundleID: sourceBundleID,
+                isSensitive: sensitive, isPinned: isPinned,
                 copyCount: Int(sqlite3_column_int(stmt, 7)), preview: preview,
-                hasMissingFiles: missing, codeLanguage: codeLanguage, favoriteName: favoriteName,
+                hasMissingFiles: missing,
+                firstCapturedAt: Date(timeIntervalSince1970: sqlite3_column_double(stmt, 12)),
+                codeLanguage: codeLanguage, favoriteName: favoriteName,
                 note: note, hasNote: sealedNote != nil,
                 retentionOverrideSeconds: sqlite3_column_type(stmt, 10) == SQLITE_NULL
                     ? nil : Int(sqlite3_column_int64(stmt, 10))
