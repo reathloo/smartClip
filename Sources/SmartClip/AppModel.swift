@@ -8,9 +8,13 @@ import ServiceManagement
 final class AppModel: ObservableObject {
     static let shared = AppModel()
     @Published var items: [ClipSummary] = [] {
-        didSet { itemsByID = items.reduce(into: [:]) { $0[$1.id] = $1 } }
+        didSet {
+            itemsByID = items.reduce(into: [:]) { $0[$1.id] = $1 }
+            itemIDs = items.map(\.id)
+        }
     }
     private var itemsByID: [UUID: ClipSummary] = [:]
+    private(set) var itemIDs: [UUID] = []
     @Published var search = ""
     @Published var showingSettings = false
     @Published var selectedID: UUID?
@@ -385,7 +389,7 @@ final class AppModel: ObservableObject {
             if reset {
                 items = page.items
             } else {
-                let existing = Set(items.map(\.id))
+                let existing = Set(itemIDs)
                 items.append(contentsOf: page.items.filter { !existing.contains($0.id) })
             }
             historyCursor = page.nextCursor
@@ -404,7 +408,7 @@ final class AppModel: ObservableObject {
             do {
                 let page = try database.page(query: historyQuery,
                                              after: historyCursor, limit: historyPageSize)
-                let existing = Set(items.map(\.id))
+                let existing = Set(itemIDs)
                 items.append(contentsOf: page.items.filter { !existing.contains($0.id) })
                 historyCursor = page.nextCursor
                 hasMoreHistory = page.hasMore
@@ -865,18 +869,18 @@ final class AppModel: ObservableObject {
     func select(_ id: UUID?) { selectedID = id }
     func togglePreview() {
         if previewedID != nil { previewedID = nil; return }
-        let resolved = HistoryNavigation.selected(in: items.map(\.id), explicit: selectedID, search: search)
+        let resolved = HistoryNavigation.selected(in: itemIDs, explicit: selectedID, search: search)
         previewedID = resolved
         if selectedID == nil { selectedID = resolved }
     }
     func closePreview() { previewedID = nil }
     func focusSearch() { focusSearchRequest &+= 1 }
     func moveSelection(_ offset: Int) {
-        selectedID = HistoryNavigation.moved(in: items.map(\.id), explicit: selectedID,
+        selectedID = HistoryNavigation.moved(in: itemIDs, explicit: selectedID,
                                              search: search, offset: offset)
     }
     var selectedItem: ClipSummary? {
-        guard let id = HistoryNavigation.selected(in: items.map(\.id), explicit: selectedID, search: search) else {
+        guard let id = HistoryNavigation.selected(in: itemIDs, explicit: selectedID, search: search) else {
             return nil
         }
         return item(for: id)
