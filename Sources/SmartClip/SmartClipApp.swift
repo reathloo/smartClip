@@ -168,7 +168,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func quitFromMenu() { NSApp.terminate(nil) }
 
     private func toggleHistory() {
-        if let panel, panel.isVisible && !panel.isMiniaturized {
+        // A nonactivating panel with hidesOnDeactivate can remain `isVisible`
+        // while it is not actually presented. Only a key panel should toggle closed;
+        // an inactive or obscured panel should be brought forward on the first click.
+        if let panel, panel.isKeyWindow && panel.isVisible && !panel.isMiniaturized {
             if model.showingSettings { showHistory() }
             else { panel.orderOut(nil) }
             return
