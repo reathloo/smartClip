@@ -58,6 +58,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var pauseObservation: AnyCancellable?
     private var updaterController: SPUStandardUpdaterController?
 
+    private var isUITestSession: Bool {
+        #if DEBUG
+        testSession != nil
+        #else
+        false
+        #endif
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         #if DEBUG
         if CommandLine.arguments.contains("--render-design") {
@@ -104,7 +112,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         model.onClosePanel = { [weak self] in self?.panel?.orderOut(nil) }
         model.onOpenSettings = { [weak self] in self?.showSettings() }
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
-        item.button?.image = NSImage(systemSymbolName: "paperclip.circle", accessibilityDescription: "SmartClip")
+        let statusSymbol = isUITestSession ? "hammer.circle" : "paperclip.circle"
+        let statusDescription = isUITestSession ? "SmartClip Test" : "SmartClip"
+        item.button?.image = NSImage(systemSymbolName: statusSymbol, accessibilityDescription: statusDescription)
         item.button?.target = self
         item.button?.action = #selector(handleStatusItemClick)
         item.button?.sendAction(on: [.leftMouseUp])
@@ -144,9 +154,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func updateStatusItemAppearance() {
-        let symbol = model.isPaused ? "pause.circle" : "paperclip.circle"
+        let symbol = model.isPaused ? "pause.circle" : isUITestSession ? "hammer.circle" : "paperclip.circle"
         statusItem?.button?.image = NSImage(systemSymbolName: symbol, accessibilityDescription: model.captureStatusLabel)
-        statusItem?.button?.toolTip = "SmartClip · \(model.captureStatusLabel)"
+        let appName = isUITestSession ? "SmartClip Test" : "SmartClip"
+        statusItem?.button?.toolTip = "\(appName) · \(model.captureStatusLabel)"
     }
 
     @objc private func resumeCapture() { model.setPaused(false) }
