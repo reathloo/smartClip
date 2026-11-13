@@ -15,4 +15,20 @@ enum ClipImageDecoder {
             ] as CFDictionary)
         }.value
     }
+
+    /// History cards only need a compact preview. Downsampling at decode time
+    /// avoids allocating the full bitmap while the user scrolls past images.
+    static func decodeThumbnail(_ data: Data, maxPixelSize: Int) async -> CGImage? {
+        await Task.detached(priority: .userInitiated) {
+            guard !Task.isCancelled,
+                  let source = CGImageSourceCreateWithData(data as CFData, nil) else { return nil }
+            return CGImageSourceCreateThumbnailAtIndex(source, 0, [
+                kCGImageSourceCreateThumbnailFromImageAlways: true,
+                kCGImageSourceCreateThumbnailWithTransform: true,
+                kCGImageSourceThumbnailMaxPixelSize: max(1, maxPixelSize),
+                kCGImageSourceShouldCache: true,
+                kCGImageSourceShouldCacheImmediately: true
+            ] as CFDictionary)
+        }.value
+    }
 }
