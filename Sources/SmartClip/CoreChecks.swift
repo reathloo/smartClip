@@ -113,13 +113,23 @@ func runCoreChecks() async throws {
             try await body(f)
         }
     }
-    func png() throws -> Data {
-        let bitmap = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 2, pixelsHigh: 2,
+    func png(width: Int = 2, height: Int = 2) throws -> Data {
+        let bitmap = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: width, pixelsHigh: height,
                                       bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true,
                                       isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0)!
         bitmap.bitmapData?.initialize(repeating: 0, count: bitmap.bytesPerRow * bitmap.pixelsHigh)
         bitmap.setColor(NSColor(deviceRed: 0.1, green: 0.5, blue: 0.4, alpha: 1), atX: 0, y: 0)
         return bitmap.representation(using: .png, properties: [:])!
+    }
+
+    await asyncTest("image.thumbnail-bounds") {
+        let thumbnail = await ClipImageDecoder.decodeThumbnail(
+            try png(width: 1_200, height: 600),
+            maxPixelSize: 320
+        )
+        try expect(thumbnail != nil, "Thumbnail decode failed")
+        try expect(max(thumbnail!.width, thumbnail!.height) <= 320,
+                   "Thumbnail exceeded its requested pixel bound")
     }
 
     for (text, kind) in [("https://example.org/a?q=1", ClipKind.url), ("HTTP://example.org", .url),
@@ -133,6 +143,29 @@ func runCoreChecks() async throws {
     }
     for value in ["4111111111111112", "0000000000000000", "123456789012", "1234567890123456789012345", "tR!cky-password-42", "ordinary text"] {
         test("sensitive.negative.\(value)") { try expect(!ClipClassifier.isSensitive(text: value), "False sensitive detection") }
+    }
+    let credentialSamples = [
+        "gh" + "p_" + String(repeating: "A", count: 36),
+        "sk-" + "proj-" + String(repeating: "b7", count: 20),
+        "sk_" + "live_" + String(repeating: "C4", count: 16),
+        "xox" + "b-" + String(repeating: "d5", count: 16),
+        "AK" + "IA" + String(repeating: "E", count: 16),
+        "AI" + "za" + String(repeating: "f6", count: 16),
+        "Bearer " + String(repeating: "g7", count: 18),
+        "eyJ" + String(repeating: "h", count: 10) + "." + String(repeating: "i8", count: 8)
+            + "." + String(repeating: "j9", count: 12),
+        "api_" + "key = \"" + String(repeating: "kL3_", count: 8) + "\"",
+        "-----BEGIN " + "PRIVATE KEY-----\nsynthetic-test-material"
+    ]
+    for (index, value) in credentialSamples.enumerated() {
+        test("sensitive.credential.\(index)") {
+            try expect(ClipClassifier.isSensitive(text: value), "Credential format was not detected")
+        }
+    }
+    for (index, value) in ["api_key = example", "password: ordinary words", "Set API_KEY in the environment"].enumerated() {
+        test("sensitive.credential-negative.\(index)") {
+            try expect(!ClipClassifier.isSensitive(text: value), "Credential documentation caused a false positive")
+        }
     }
     for marker in ["org.nspasteboard.ConcealedType", "org.nspasteboard.TransientType", "com.agilebits.onepassword"] {
         test("sensitive.marker.\(marker)") { try expect(ClipClassifier.isSensitive(text: nil, pasteboardTypes: [marker]), "Marker ignored") }
@@ -318,6 +351,18 @@ func runCoreChecks() async throws {
         try expect(try f.db.note(for: id) == nil && f.db.list().first?.hasNote == false,
                    "Empty note was not removed")
     }
+    integration("database.sensitive-entry-conceals-favorite-name") { f in
+        try f.capture(.text("private reusable content"))
+        let id = try f.row().id
+        try f.db.setFavoriteName("Private favorite label", for: id)
+        try f.db.setPinned(true, for: id)
+        try f.db.setSensitive(true, for: id)
+        let row = try f.db.list().first
+        try expect(row?.favoriteName == nil && row?.preview == "••••••••",
+                   "Sensitive favorite metadata was exposed in history")
+        try expect(try f.db.list(search: "favorite label").isEmpty,
+                   "Sensitive favorite name was searchable")
+    }
     test("database.favorite-name-migrates-existing-history") {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent("SmartClipMigration-\(UUID())")
         let path = directory.appendingPathComponent("history.sqlite").path
@@ -469,12 +514,14 @@ func runCoreChecks() async throws {
     integration("model.safe-defaults-and-persistent-settings") { f in
         try expect(f.model.shortcut == nil && !f.model.autoPaste && !f.model.onboardingComplete, "Unsafe first-run default")
         try expect(f.model.normalDays == 30 && f.model.sensitiveSeconds == 3_600, "Wrong retention default")
+        try expect(!f.model.relativeTimestamps, "Relative timestamps should be opt-in")
         f.model.setCardView(true); f.model.setDarkMode(true); f.model.setPaused(true); f.model.setNormalDays(90)
+        f.model.setRelativeTimestamps(true)
         f.model.setSensitiveSeconds(300); f.model.setExcluded("  test.excluded  ", excluded: true)
         f.model.setExcluded("   ", excluded: true); f.model.setMonitoring(true)
         let reloaded = AppModel(defaults: f.defaults, pasteboard: f.pasteboard)
         try expect(reloaded.cardView && reloaded.darkMode && reloaded.appearanceMode == .midnight
-                   && reloaded.isPaused && reloaded.onboardingComplete,
+                   && reloaded.relativeTimestamps && reloaded.isPaused && reloaded.onboardingComplete,
                    "Settings not persisted")
         try expect(reloaded.normalDays == 90 && reloaded.sensitiveSeconds == 300, "Retention not persisted")
         try expect(reloaded.excludedBundles == ["test.excluded"], "Exclusions not trimmed/persisted")
@@ -868,6 +915,18 @@ func runCoreChecks() async throws {
         try expect(try f.db.list(kind: .url).count == 1, "URL filter decoded unrelated text")
         try expectFailure { _ = try f.db.list() }
     }
+    integration("database.source-filter-skips-unrelated-payload") { f in
+        try f.capture(.text("unrelated"), source: "Other", bundle: "test.other")
+        var handle: OpaquePointer?
+        try expect(sqlite3_open(f.path, &handle) == SQLITE_OK, "Cannot open fixture")
+        defer { sqlite3_close(handle) }
+        try expect(sqlite3_exec(handle, "UPDATE clips SET payload=x'00' WHERE source_bundle='test.other'",
+                                nil, nil, nil) == SQLITE_OK, "Cannot corrupt unrelated fixture")
+        try f.capture(.text("matching"), source: "Match", bundle: "test.match")
+        let page = try f.db.page(query: HistoryQuery(sourceBundleID: "test.match"), after: nil, limit: 10)
+        try expect(page.items.count == 1 && page.items.first?.sourceBundleID == "test.match",
+                   "Source filter decoded an unrelated payload")
+    }
     await asyncIntegration("history-store.serializes-concurrent-captures") { f in
         let store = HistoryStore(database: f.db)
         let baseDate = f.time
@@ -974,6 +1033,15 @@ func runCoreChecks() async throws {
                                 now: { f.time }, systemIntegrationsEnabled: false)
         try expect(!reloaded.storeSensitive && reloaded.storageLimitBytes == 0,
                    "Privacy or storage-limit setting did not persist safely")
+    }
+    integration("model-api-key-obeys-sensitive-storage-policy") { f in
+        f.model.setMonitoring(true)
+        f.model.setStoreSensitive(false)
+        let token = "gh" + "p_" + String(repeating: "Q7", count: 18)
+        try f.write(token)
+        f.poll()
+        try expect(try f.db.list().isEmpty, "Detected API key was stored despite the privacy setting")
+        try expect(f.model.statusMessage.contains("not stored"), "Skipped API key was not explained")
     }
     integration("drag-provider-types-and-sensitive-guard") { f in
         let regular = ClipSummary(id: UUID(), kind: .text, lastCopiedAt: f.time, sourceName: nil,
