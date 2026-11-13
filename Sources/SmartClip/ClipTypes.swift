@@ -133,14 +133,32 @@ enum ClipNote {
 }
 
 enum ClipClassifier {
+    private static let credentialPatterns: [NSRegularExpression] = [
+        #"-----BEGIN(?: [A-Z0-9]+)? PRIVATE KEY-----"#,
+        #"\bBearer[ \t]+[A-Za-z0-9._~+/=-]{16,}"#,
+        #"\beyJ[A-Za-z0-9_-]{5,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{16,}\b"#,
+        #"\b(?:gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,})\b"#,
+        #"\b(?:sk-(?:proj-|ant-[A-Za-z0-9-]*)?[A-Za-z0-9_-]{20,}|sk_live_[A-Za-z0-9_-]{20,}|xox[baprs]-[A-Za-z0-9-]{20,})\b"#,
+        #"\b(?:AKIA[A-Z0-9]{16}|AIza[A-Za-z0-9_-]{30,})\b"#
+    ].compactMap { try? NSRegularExpression(pattern: $0, options: .caseInsensitive) }
+
+    private static let assignmentPattern = try? NSRegularExpression(
+        pattern: #"\b(?:api[_-]?key|access[_-]?token|auth[_-]?token|client[_-]?secret|secret[_-]?key|password|passwd)\b\s*(?:=|:)\s*[\"']?([^\s\"']{16,})"#,
+        options: .caseInsensitive
+    )
+
     static func isSensitive(text: String?, pasteboardTypes: [String] = []) -> Bool {
         let markers = ["org.nspasteboard.ConcealedType", "org.nspasteboard.TransientType", "com.agilebits.onepassword"]
         if pasteboardTypes.contains(where: { type in markers.contains(where: type.hasPrefix) }) { return true }
         guard let text else { return false }
+        let fullRange = NSRange(text.startIndex..<text.endIndex, in: text)
+        if credentialPatterns.contains(where: { $0.firstMatch(in: text, range: fullRange) != nil }) { return true }
+        if let match = assignmentPattern?.firstMatch(in: text, range: fullRange),
+           match.numberOfRanges > 1, let range = Range(match.range(at: 1), in: text),
+           looksLikeAssignedSecret(String(text[range])) { return true }
         let pattern = #"(?<!\d)(?:\d[ -]?){13,19}(?!\d)"#
         guard let regex = try? NSRegularExpression(pattern: pattern) else { return false }
-        let range = NSRange(text.startIndex..<text.endIndex, in: text)
-        return regex.matches(in: text, range: range).contains { match in
+        return regex.matches(in: text, range: fullRange).contains { match in
             guard let swiftRange = Range(match.range, in: text) else { return false }
             let digits = text[swiftRange].compactMap(\.wholeNumberValue)
             guard (13...19).contains(digits.count), digits.contains(where: { $0 != 0 }) else { return false }
@@ -151,6 +169,18 @@ enum ClipClassifier {
             }
             return sum.isMultiple(of: 10)
         }
+    }
+
+    private static func looksLikeAssignedSecret(_ value: String) -> Bool {
+        let lowercased = value.lowercased()
+        if ["example", "placeholder", "changeme", "your_", "<", ">"].contains(where: lowercased.contains) {
+            return false
+        }
+        let classes = [
+            value.contains(where: { $0.isLowercase }), value.contains(where: { $0.isUppercase }),
+            value.contains(where: { $0.isNumber }), value.contains(where: { !$0.isLetter && !$0.isNumber })
+        ].filter { $0 }.count
+        return classes >= 2 || value.count >= 24
     }
 }
 
