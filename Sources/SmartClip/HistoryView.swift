@@ -311,7 +311,9 @@ struct HistoryView: View {
 
     @ViewBuilder private func entrySection(_ title: String, pinned: Bool) -> some View {
         let items = model.items.filter { $0.isPinned == pinned }
-        let selectedID = selectedItem?.id
+        // Keep the implicit first item available for Return/keyboard actions,
+        // but only draw a selection after the user explicitly navigated.
+        let selectedID = model.selectedID
         if !items.isEmpty {
             HStack(spacing: 6) {
                 if pinned { Image(systemName: "pin.fill").font(.system(size: 10)) }
@@ -320,12 +322,28 @@ struct HistoryView: View {
                 Text("\(items.count)").font(.system(size: 10, weight: .medium, design: .monospaced))
             }
             .foregroundStyle(.secondary).padding(.horizontal, 10).padding(.top, 16).padding(.bottom, 5)
-            ForEach(items) { item in
-                ClipRow(model: model, snapshot: item, card: model.cardView, selected: selectedID == item.id,
-                        onPreview: { model.selectedID = item.id; model.previewedID = item.id })
-                    .id(item.id)
+            if model.cardView {
+                ForEach(items) { item in entryRow(item, selectedID: selectedID, card: true) }
+            } else {
+                LazyVStack(spacing: 0) {
+                    ForEach(items) { item in
+                        entryRow(item, selectedID: selectedID, card: false)
+                        if item.id != items.last?.id {
+                            Divider().overlay(theme.line).padding(.leading, 60)
+                        }
+                    }
+                }
+                .background(theme.surface, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(theme.line))
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
             }
         }
+    }
+
+    private func entryRow(_ item: ClipSummary, selectedID: UUID?, card: Bool) -> some View {
+        ClipRow(model: model, snapshot: item, card: card, selected: selectedID == item.id,
+                onPreview: { model.selectedID = item.id; model.previewedID = item.id })
+            .id(item.id)
     }
 
     private var emptyState: some View {
