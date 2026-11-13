@@ -571,7 +571,7 @@ private struct ClipRow: View {
                 }
                 .contentShape(Rectangle())
             }
-            .buttonStyle(ResponsiveButtonStyle())
+            .buttonStyle(ResponsiveButtonStyle(showsHoverBackground: false))
             .accessibilityLabel("\(item.favoriteName.map { "\($0), " } ?? "")\(item.kind.label): \(item.isSensitive ? "sensitive entry" : item.preview)\(item.hasNote ? ", has note" : "")")
             .accessibilityAddTraits(selected ? .isSelected : [])
             VStack(alignment: .trailing, spacing: 7) {
@@ -607,11 +607,29 @@ private struct ClipRow: View {
         }
         .padding(card ? 15 : 12)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(selected ? theme.selection
-                    : card ? theme.surface : hovered ? theme.surface.opacity(0.72) : .clear,
-                    in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
-            .strokeBorder(selected ? theme.accent.opacity(0.34) : card ? theme.line : .clear))
+        .background(card ? theme.surface : .clear,
+                    in: RoundedRectangle(cornerRadius: card ? 12 : 0, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: card ? 12 : 0, style: .continuous)
+                .fill(selected ? theme.selection
+                      : hovered ? theme.accent.opacity(0.04)
+                      : .clear)
+                .allowsHitTesting(false)
+        }
+        .overlay {
+            if card {
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .strokeBorder(selected ? theme.accent.opacity(0.34)
+                                  : hovered ? theme.accent.opacity(0.12)
+                                  : theme.line)
+                    .allowsHitTesting(false)
+            }
+        }
+        .overlay(alignment: .leading) {
+            if selected && !card {
+                Capsule().fill(theme.accent).frame(width: 3).padding(.vertical, 9)
+            }
+        }
         .shadow(color: card ? .black.opacity(0.035) : .clear, radius: 5, y: 2)
         .onHover { hovered = $0 }
         .modifier(ClipDragModifier(model: model, item: item))
