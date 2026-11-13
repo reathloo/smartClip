@@ -59,6 +59,7 @@ final class ClipDatabase: @unchecked Sendable {
             try execute("ALTER TABLE clips ADD COLUMN note BLOB")
         }
         try execute("CREATE INDEX IF NOT EXISTS clips_order ON clips(pinned DESC, last_copied DESC)")
+        try execute("CREATE INDEX IF NOT EXISTS clips_source_order ON clips(source_bundle, pinned DESC, last_copied DESC)")
     }
 
     deinit { sqlite3_close(db) }
@@ -151,29 +152,41 @@ final class ClipDatabase: @unchecked Sendable {
 
     func page(query: HistoryQuery, after cursor: HistoryCursor?, limit: Int) throws -> HistoryPage {
         guard limit > 0 else { return HistoryPage(items: [], nextCursor: nil, hasMore: false) }
-        let sql: String
-        if cursor == nil {
-            sql = """
-                SELECT id, kind, last_copied, source_name, source_bundle, sensitive, pinned, copy_count, payload, favorite_name, retention_seconds, note, created
-                FROM clips ORDER BY pinned DESC, last_copied DESC, id DESC
-                """
-        } else {
-            sql = """
-                SELECT id, kind, last_copied, source_name, source_bundle, sensitive, pinned, copy_count, payload, favorite_name, retention_seconds, note, created
-                FROM clips
-                WHERE pinned < ? OR (pinned = ? AND (last_copied < ? OR (last_copied = ? AND id < ?)))
-                ORDER BY pinned DESC, last_copied DESC, id DESC
-                """
+        var predicates: [String] = []
+        if cursor != nil {
+            predicates.append("(pinned < ? OR (pinned = ? AND (last_copied < ? OR (last_copied = ? AND id < ?))))")
         }
+        if query.copiedSince != nil { predicates.append("last_copied >= ?") }
+        if query.sourceBundleID != nil { predicates.append("source_bundle = ?") }
+        if query.favoritesOnly { predicates.append("pinned = 1") }
+        if let kind = query.kind {
+            predicates.append(kind == .code ? "kind IN ('text', 'code')" : "kind = ?")
+        }
+        let whereClause = predicates.isEmpty ? "" : "WHERE " + predicates.joined(separator: " AND ")
+        let sql = """
+            SELECT id, kind, last_copied, source_name, source_bundle, sensitive, pinned, copy_count, payload, favorite_name, retention_seconds, note, created
+            FROM clips \(whereClause)
+            ORDER BY pinned DESC, last_copied DESC, id DESC
+            """
         let stmt = try prepare(sql)
         defer { sqlite3_finalize(stmt) }
+        var bindIndex: Int32 = 1
         if let cursor {
             let pinned: Int32 = cursor.pinned ? 1 : 0
-            sqlite3_bind_int(stmt, 1, pinned)
-            sqlite3_bind_int(stmt, 2, pinned)
-            sqlite3_bind_double(stmt, 3, cursor.lastCopiedAt.timeIntervalSince1970)
-            sqlite3_bind_double(stmt, 4, cursor.lastCopiedAt.timeIntervalSince1970)
-            bind(cursor.id.uuidString, to: 5, in: stmt)
+            sqlite3_bind_int(stmt, bindIndex, pinned); bindIndex += 1
+            sqlite3_bind_int(stmt, bindIndex, pinned); bindIndex += 1
+            sqlite3_bind_double(stmt, bindIndex, cursor.lastCopiedAt.timeIntervalSince1970); bindIndex += 1
+            sqlite3_bind_double(stmt, bindIndex, cursor.lastCopiedAt.timeIntervalSince1970); bindIndex += 1
+            bind(cursor.id.uuidString, to: bindIndex, in: stmt); bindIndex += 1
+        }
+        if let copiedSince = query.copiedSince {
+            sqlite3_bind_double(stmt, bindIndex, copiedSince.timeIntervalSince1970); bindIndex += 1
+        }
+        if let sourceBundleID = query.sourceBundleID {
+            bind(sourceBundleID, to: bindIndex, in: stmt); bindIndex += 1
+        }
+        if let kind = query.kind, kind != .code {
+            bind(kind.rawValue, to: bindIndex, in: stmt)
         }
         let needle = query.search.trimmingCharacters(in: .whitespacesAndNewlines)
         var results: [ClipSummary] = []
@@ -184,17 +197,18 @@ final class ClipDatabase: @unchecked Sendable {
             let copiedAt = Date(timeIntervalSince1970: sqlite3_column_double(stmt, 2))
             let sourceBundleID = columnString(stmt, 4)
             let isPinned = sqlite3_column_int(stmt, 6) != 0
-            if let copiedSince = query.copiedSince, copiedAt < copiedSince { continue }
-            if let requiredBundleID = query.sourceBundleID, sourceBundleID != requiredBundleID { continue }
-            if query.favoritesOnly && !isPinned { continue }
             // Old text rows can become code on read; other types cannot change.
             if let kind = query.kind, rowKind != kind, !(rowKind == .text && kind == .code) { continue }
             var displayKind = rowKind
             var codeLanguage: String?
             let sourceName = columnString(stmt, 3)
             let sensitive = sqlite3_column_int(stmt, 5) != 0
+            let sourceMatches = sourceName?.localizedCaseInsensitiveContains(needle) == true
+            // Sensitive content is searchable only by non-secret source metadata.
+            // Do not decrypt its payload, favorite name, or note for a history row.
+            if sensitive && !needle.isEmpty && !sourceMatches { continue }
             let favoriteName: String?
-            if let sealedName = columnData(stmt, 9) {
+            if !sensitive, let sealedName = columnData(stmt, 9) {
                 favoriteName = String(data: try crypto.open(sealedName), encoding: .utf8)
             } else {
                 favoriteName = nil
@@ -208,15 +222,14 @@ final class ClipDatabase: @unchecked Sendable {
             }
             var preview = sensitive ? "••••••••" : rowKind == .image ? "Image" : ""
             var missing = false
-            let sourceMatches = sourceName?.localizedCaseInsensitiveContains(needle) == true
-            if rowKind != .image, let sealed = columnData(stmt, 8) {
+            if !sensitive, rowKind != .image, let sealed = columnData(stmt, 8) {
                 let payload = try PropertyListDecoder().decode(ClipPayload.self, from: crypto.open(sealed))
                 if rowKind == .text || rowKind == .code,
                    let text = payload.text, let language = CodeDetector.detect(text) {
                     displayKind = .code
-                    if !sensitive { codeLanguage = language.rawValue }
+                    codeLanguage = language.rawValue
                 }
-                if !sensitive { preview = payload.preview }
+                preview = payload.preview
                 missing = payload.hasMissingFiles
             }
             if let kind = query.kind, kind != displayKind { continue }
