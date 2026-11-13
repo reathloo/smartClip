@@ -263,6 +263,17 @@ struct SettingsView: View {
                     }
                     .labelsHidden().pickerStyle(.segmented).frame(width: 145)
                 }
+                Divider()
+                settingRow("Entry timestamps", detail: "Show the exact copy time or elapsed time.") {
+                    Picker("Entry timestamps", selection: Binding(
+                        get: { model.relativeTimestamps },
+                        set: { model.setRelativeTimestamps($0) }
+                    )) {
+                        Text("Date & time").tag(false)
+                        Text("Relative").tag(true)
+                    }
+                    .labelsHidden().pickerStyle(.segmented).frame(width: 185)
+                }
             }
             SettingsCard("Storage", symbol: "internaldrive") {
                 VStack(alignment: .leading, spacing: 8) {
