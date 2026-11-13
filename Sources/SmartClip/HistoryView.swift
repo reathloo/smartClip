@@ -770,7 +770,8 @@ private struct ClipImagePreview: View {
         .task(id: id) {
             guard let data = await model.loadPayload(for: id)?.imageData,
                   !Task.isCancelled else { return }
-            guard let decoded = await ClipImageDecoder.decode(data), !Task.isCancelled else { return }
+            guard let decoded = await ClipImageDecoder.decodeThumbnail(data, maxPixelSize: 1_024),
+                  !Task.isCancelled else { return }
             image = NSImage(cgImage: decoded, size: .zero)
         }
         .onDisappear { image = nil }
