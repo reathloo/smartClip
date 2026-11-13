@@ -253,10 +253,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
 private struct SmartClipWindowContent: View {
     @ObservedObject var model: AppModel
+    @StateObject private var historyScrollPosition = HistoryScrollPosition()
 
     var body: some View {
         if model.showingSettings { SettingsView(model: model) }
-        else { HistoryView(model: model) }
+        else { HistoryView(model: model, scrollPosition: historyScrollPosition) }
     }
 }
 
