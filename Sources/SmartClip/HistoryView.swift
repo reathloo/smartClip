@@ -1,14 +1,24 @@
 import AppKit
 import SwiftUI
 
+final class HistoryScrollPosition: ObservableObject {
+    var offset: CGFloat = 0
+}
+
 struct HistoryView: View {
     @ObservedObject var model: AppModel
+    private let scrollPosition: HistoryScrollPosition
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @FocusState private var searchFocused: Bool
     @State private var searchText = ""
     @State private var showingRefinements = false
     private var theme: ClipPalette { ClipTheme.palette(for: model.appearanceMode) }
+
+    init(model: AppModel, scrollPosition: HistoryScrollPosition = HistoryScrollPosition()) {
+        self.model = model
+        self.scrollPosition = scrollPosition
+    }
 
     private var selectedItem: ClipSummary? {
         guard let id = HistoryNavigation.selected(in: model.itemIDs, explicit: model.selectedID, search: searchText) else { return nil }
@@ -17,39 +27,23 @@ struct HistoryView: View {
 
     var body: some View {
         ZStack {
-            VStack(spacing: 0) {
-                if let previewedID = model.previewedID, let item = model.item(for: previewedID) {
-                    ClipPreviewView(
-                        item: item,
-                        loadPayload: { await model.loadPayload(for: $0) },
-                        loadNote: { await model.loadNote(for: $0) },
-                        saveNote: { await model.saveNote($0, for: item) },
-                        onClose: { model.closePreview() },
-                        onCopy: { model.copy(item) },
-                        onOpen: item.kind == .url ? { model.openURL(item) } : nil
-                    )
-                } else {
-                    topBar
-                    if model.items.isEmpty {
-                        emptyState
-                    } else {
-                        ScrollViewReader { proxy in
-                            ScrollView {
-                                LazyVStack(spacing: model.cardView ? 10 : 4) {
-                                    entrySection("Pinned", pinned: true)
-                                    entrySection("Recently copied", pinned: false)
-                                    loadMoreSection
-                                }
-                                .padding(.horizontal, 12).padding(.bottom, 14)
-                            }
-                            .onChange(of: model.selectedID) { _, id in
-                                if let id { proxy.scrollTo(id) }
-                            }
-                        }
+            historyContent
+                .allowsHitTesting(model.previewedID == nil)
+                .accessibilityHidden(model.previewedID != nil)
+                .overlay {
+                    if let previewedID = model.previewedID, let item = model.item(for: previewedID) {
+                        ClipPreviewView(
+                            item: item,
+                            loadPayload: { await model.loadPayload(for: $0) },
+                            loadNote: { await model.loadNote(for: $0) },
+                            saveNote: { await model.saveNote($0, for: item) },
+                            onClose: { model.closePreview() },
+                            onCopy: { model.copy(item) },
+                            onOpen: item.kind == .url ? { model.openURL(item) } : nil
+                        )
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
                     }
-                    footer
                 }
-            }
             if let message = model.copyConfirmationMessage {
                 copyConfirmation(message)
             }
@@ -83,6 +77,31 @@ struct HistoryView: View {
         }
         .animation(reduceMotion ? nil : .spring(response: 0.34, dampingFraction: 1), value: model.cardView)
         .animation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 1), value: model.filter)
+    }
+
+    private var historyContent: some View {
+        VStack(spacing: 0) {
+            topBar
+            if model.items.isEmpty {
+                emptyState
+            } else {
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        LazyVStack(spacing: model.cardView ? 10 : 4) {
+                            entrySection("Pinned", pinned: true)
+                            entrySection("Recently copied", pinned: false)
+                            loadMoreSection
+                        }
+                        .padding(.horizontal, 12).padding(.bottom, 14)
+                        .background(HistoryScrollPositionKeeper(position: scrollPosition))
+                    }
+                    .onChange(of: model.selectedID) { _, id in
+                        if let id { proxy.scrollTo(id) }
+                    }
+                }
+            }
+            footer
+        }
     }
 
     private func copyConfirmation(_ message: String) -> some View {
@@ -492,8 +511,96 @@ struct HistoryView: View {
     }
 }
 
+private struct HistoryScrollPositionKeeper: NSViewRepresentable {
+    let position: HistoryScrollPosition
+
+    func makeCoordinator() -> Coordinator { Coordinator(position: position) }
+
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView(frame: .zero)
+        context.coordinator.connect(to: view)
+        return view
+    }
+
+    func updateNSView(_ view: NSView, context: Context) {
+        context.coordinator.position = position
+        context.coordinator.connect(to: view)
+    }
+
+    static func dismantleNSView(_ view: NSView, coordinator: Coordinator) {
+        coordinator.disconnect()
+    }
+
+    @MainActor
+    final class Coordinator: NSObject {
+        var position: HistoryScrollPosition
+        private weak var clipView: NSClipView?
+        private weak var scrollView: NSScrollView?
+        private var connectionTask: Task<Void, Never>?
+
+        init(position: HistoryScrollPosition) {
+            self.position = position
+        }
+
+        func connect(to view: NSView) {
+            connectionTask?.cancel()
+            connectionTask = Task { @MainActor [weak self, weak view] in
+                await Task.yield()
+                guard let self, let view, let scrollView = view.enclosingScrollView else { return }
+                let clipView = scrollView.contentView
+                guard self.clipView !== clipView else { return }
+                self.stopObserving()
+                self.clipView = clipView
+                self.scrollView = scrollView
+                clipView.postsBoundsChangedNotifications = true
+                NotificationCenter.default.addObserver(
+                    self,
+                    selector: #selector(boundsDidChange(_:)),
+                    name: NSView.boundsDidChangeNotification,
+                    object: clipView
+                )
+                self.restoreOffset()
+            }
+        }
+
+        func disconnect() {
+            connectionTask?.cancel()
+            connectionTask = nil
+            stopObserving()
+        }
+
+        @objc private func boundsDidChange(_ notification: Notification) {
+            guard let clipView, clipView.window != nil else { return }
+            position.offset = clipView.bounds.minY
+        }
+
+        private func restoreOffset() {
+            guard position.offset > 0, let clipView, let scrollView,
+                  let documentView = scrollView.documentView else { return }
+            let minimum = documentView.bounds.minY
+            let maximum = max(minimum, documentView.bounds.maxY - clipView.bounds.height)
+            let restored = min(max(position.offset, minimum), maximum)
+            clipView.scroll(to: NSPoint(x: clipView.bounds.minX, y: restored))
+            scrollView.reflectScrolledClipView(clipView)
+        }
+
+        private func stopObserving() {
+            if let clipView {
+                NotificationCenter.default.removeObserver(
+                    self,
+                    name: NSView.boundsDidChangeNotification,
+                    object: clipView
+                )
+            }
+            clipView = nil
+            scrollView = nil
+        }
+    }
+}
+
 private struct ClipRow: View {
     @Environment(\.clipPalette) private var theme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let model: AppModel
     let snapshot: ClipSummary
     // Lazy rows may retain their identity when moving between sections. Resolve
@@ -632,6 +739,7 @@ private struct ClipRow: View {
         }
         .shadow(color: card ? .black.opacity(0.035) : .clear, radius: 5, y: 2)
         .onHover { hovered = $0 }
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.12), value: hovered)
         .modifier(ClipDragModifier(model: model, item: item))
         .task(id: dragState) {
             dragFileURLs = []
