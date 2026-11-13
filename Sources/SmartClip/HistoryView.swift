@@ -11,7 +11,7 @@ struct HistoryView: View {
     private var theme: ClipPalette { ClipTheme.palette(for: model.appearanceMode) }
 
     private var selectedItem: ClipSummary? {
-        guard let id = HistoryNavigation.selected(in: model.items.map(\.id), explicit: model.selectedID, search: searchText) else { return nil }
+        guard let id = HistoryNavigation.selected(in: model.itemIDs, explicit: model.selectedID, search: searchText) else { return nil }
         return model.item(for: id)
     }
 
@@ -60,7 +60,7 @@ struct HistoryView: View {
         .preferredColorScheme(model.appearanceMode.colorScheme)
         .environment(\.clipPalette, theme)
         .environment(\.locale, Locale(identifier: "en_US"))
-        .onChange(of: model.items.map(\.id)) { _, ids in
+        .onChange(of: model.itemIDs) { _, ids in
             if let selectedID = model.selectedID, !ids.contains(selectedID) { model.selectedID = nil }
             if let previewedID = model.previewedID, !ids.contains(previewedID) { model.previewedID = nil }
         }
@@ -452,7 +452,7 @@ struct HistoryView: View {
     private func moveSelection(_ offset: Int) {
         // Resolve the latest query before selecting, even within the debounce interval.
         model.applySearchImmediately(searchText)
-        model.selectedID = HistoryNavigation.moved(in: model.items.map(\.id), explicit: model.selectedID,
+        model.selectedID = HistoryNavigation.moved(in: model.itemIDs, explicit: model.selectedID,
                                                    search: searchText, offset: offset)
     }
 
