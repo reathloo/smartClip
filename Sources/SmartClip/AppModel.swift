@@ -26,6 +26,7 @@ final class AppModel: ObservableObject {
     @Published var sourceBundleFilter: String?
     @Published var favoritesOnly = false
     @Published var cardView: Bool
+    @Published var relativeTimestamps: Bool
     @Published var darkMode: Bool
     @Published var appearanceMode: AppearanceMode
     @Published var statusMessage = ""
@@ -99,6 +100,7 @@ final class AppModel: ObservableObject {
         self.systemIntegrationsEnabled = systemIntegrationsEnabled
         self.lastChangeCount = pasteboard.changeCount
         cardView = defaults.bool(forKey: "cardView")
+        relativeTimestamps = defaults.object(forKey: "relativeTimestamps") as? Bool ?? false
         let initialAppearance = defaults.string(forKey: "appearanceMode").flatMap(AppearanceMode.init(rawValue:))
             ?? (defaults.bool(forKey: "darkMode") ? .midnight : .light)
         appearanceMode = initialAppearance
@@ -817,6 +819,10 @@ final class AppModel: ObservableObject {
         }
     }
     func setCardView(_ value: Bool) { cardView = value; defaults.set(value, forKey: "cardView") }
+    func setRelativeTimestamps(_ value: Bool) {
+        relativeTimestamps = value
+        defaults.set(value, forKey: "relativeTimestamps")
+    }
     func setDarkMode(_ value: Bool) { setAppearanceMode(value ? .midnight : .light) }
     func setAppearanceMode(_ mode: AppearanceMode) {
         appearanceMode = mode
