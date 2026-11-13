@@ -542,7 +542,7 @@ final class AppModel: ObservableObject {
     private func finishCopy(_ message: String) {
         showStatus(message)
         copyConfirmationMessage = message
-        let close = { [weak self] in
+        let close: @MainActor @Sendable () -> Void = { [weak self] in
             guard let self else { return }
             self.copyConfirmationMessage = nil
             self.onClosePanel?()
