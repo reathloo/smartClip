@@ -538,7 +538,7 @@ private struct ClipRow: View {
                             SourceAppIcon(bundleID: item.sourceBundleID, size: 13)
                             Text(item.sourceName ?? "Unknown app").help("Source app estimated at copy time")
                             Text("·").foregroundStyle(.tertiary)
-                            Text(item.firstCapturedAt ?? item.lastCopiedAt, style: .relative)
+                            timestampText
                             if item.hasMissingFiles {
                                 Image(systemName: "exclamationmark.triangle").foregroundStyle(.orange)
                                     .help("Original file is missing")
@@ -624,6 +624,17 @@ private struct ClipRow: View {
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("The name is stored encrypted and can be found through search.")
+        }
+    }
+
+    @ViewBuilder private var timestampText: some View {
+        let timestamp = item.firstCapturedAt ?? item.lastCopiedAt
+        if model.relativeTimestamps {
+            Text(timestamp, style: .relative)
+                .help(timestamp.formatted(date: .long, time: .standard))
+        } else {
+            Text(timestamp.formatted(date: .numeric, time: .shortened))
+                .help(timestamp.formatted(date: .long, time: .standard))
         }
     }
 
