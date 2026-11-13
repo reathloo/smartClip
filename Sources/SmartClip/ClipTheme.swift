@@ -117,28 +117,65 @@ struct IconControlStyle: ButtonStyle {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     func makeBody(configuration: Configuration) -> some View {
+        IconControlStyleBody(configuration: configuration, reduceMotion: reduceMotion)
+    }
+}
+
+private struct IconControlStyleBody: View {
+    @Environment(\.clipPalette) private var theme
+    let configuration: ButtonStyleConfiguration
+    let reduceMotion: Bool
+    @State private var hovered = false
+
+    var body: some View {
         configuration.label
             .font(.system(size: 13, weight: .medium))
-            .foregroundStyle(.secondary)
+            .foregroundStyle(hovered ? Color.primary : Color.secondary)
             .frame(width: 30, height: 30)
-            .background(configuration.isPressed ? Color.primary.opacity(0.10) : .clear,
+            .background(configuration.isPressed ? Color.primary.opacity(0.12)
+                        : hovered ? theme.accent.opacity(0.10) : .clear,
                         in: RoundedRectangle(cornerRadius: 8, style: .continuous))
             .scaleEffect(configuration.isPressed ? 0.94 : 1)
             .animation(reduceMotion ? nil : .spring(response: 0.22, dampingFraction: 1),
                        value: configuration.isPressed)
+            .animation(reduceMotion ? nil : .easeOut(duration: 0.12), value: hovered)
             .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .onHover { hovered = $0 }
     }
 }
 
 struct ResponsiveButtonStyle: ButtonStyle {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    var showsHoverBackground = true
+    var cornerRadius: CGFloat = 8
 
     func makeBody(configuration: Configuration) -> some View {
+        ResponsiveButtonStyleBody(configuration: configuration,
+                                  reduceMotion: reduceMotion,
+                                  showsHoverBackground: showsHoverBackground,
+                                  cornerRadius: cornerRadius)
+    }
+}
+
+private struct ResponsiveButtonStyleBody: View {
+    @Environment(\.clipPalette) private var theme
+    let configuration: ButtonStyleConfiguration
+    let reduceMotion: Bool
+    let showsHoverBackground: Bool
+    let cornerRadius: CGFloat
+    @State private var hovered = false
+
+    var body: some View {
         configuration.label
             .scaleEffect(configuration.isPressed ? 0.985 : 1)
             .opacity(configuration.isPressed ? 0.82 : 1)
+            .background(showsHoverBackground && hovered ? theme.accent.opacity(0.075) : .clear,
+                        in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
             .animation(reduceMotion ? nil : .spring(response: 0.22, dampingFraction: 1),
                        value: configuration.isPressed)
+            .animation(reduceMotion ? nil : .easeOut(duration: 0.12), value: hovered)
+            .contentShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+            .onHover { hovered = $0 }
     }
 }
 
