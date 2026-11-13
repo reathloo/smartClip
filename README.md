@@ -26,15 +26,16 @@ service, telemetry, or remote processing.
   shortcut, then search and copy without leaving your workflow.
 - **Native on macOS.** Built with SwiftUI and AppKit, with light and dark modes,
   launch at login, native keyboard behavior, and Accessibility-aware paste.
-- **Careful with sensitive data.** Concealed clipboard markers and valid card
-  numbers are masked and receive shorter retention limits.
+- **Careful with sensitive data.** Concealed clipboard markers, valid card
+  numbers, and common credential formats are masked and receive shorter
+  retention limits.
 
 ## Features
 
 | History | Workflow | Privacy and control |
 | --- | --- | --- |
 | Text, URLs, email, code, images, and file references | Search by type, time, source app, and favorites | Encrypted local payloads |
-| Duplicate handling and source-app estimate | Keyboard actions, drag-and-drop, and automatic paste | Sensitive-content masking or complete exclusion |
+| Duplicate handling and source-app estimate | Keyboard actions, drag-and-drop, exact or relative timestamps, and automatic paste | Sensitive-content masking or complete exclusion |
 | File type, size, and modification details in preview | Encrypted notes, named favorites, and per-entry retention | Capture pauses, permission checks, and excluded apps |
 | Automatic cleanup and storage limits | Menu-bar status and launch at login | Keep-favorites cleanup and no telemetry |
 
@@ -90,7 +91,7 @@ Useful commands:
 ```sh
 zsh scripts/run-dev.sh          # build and restart the real app
 zsh scripts/run-dev.sh --ui     # isolated UI preview with sample data
-zsh scripts/test.sh             # run all 125 core checks
+zsh scripts/test.sh             # run all 142 core checks
 zsh scripts/build-app.sh        # create dist/SmartClip.app
 ```
 
