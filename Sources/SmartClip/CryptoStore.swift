@@ -19,7 +19,10 @@ struct CryptoStore: Sendable {
 
     init(key: SymmetricKey) { self.key = key }
 
-    static func loadOrCreate() throws -> Self {
+    static func loadOrCreate(
+        copyItem: (_ query: CFDictionary, _ result: UnsafeMutablePointer<CFTypeRef?>?) -> OSStatus = SecItemCopyMatching,
+        addItem: (_ attributes: CFDictionary, _ result: UnsafeMutablePointer<CFTypeRef?>?) -> OSStatus = SecItemAdd
+    ) throws -> Self {
         let service = "dev.smartclip.SmartClip.history-key"
         let account = "local-history"
         let query: [String: Any] = [
@@ -31,7 +34,7 @@ struct CryptoStore: Sendable {
             kSecMatchLimit as String: kSecMatchLimitOne
         ]
         var result: CFTypeRef?
-        let status = SecItemCopyMatching(query as CFDictionary, &result)
+        let status = copyItem(query as CFDictionary, &result)
         if status == errSecSuccess {
             guard let data = result as? Data, data.count == 32 else { throw CryptoStoreError.missingData }
             return Self(key: SymmetricKey(data: data))
@@ -44,9 +47,18 @@ struct CryptoStore: Sendable {
         add.removeValue(forKey: kSecMatchLimit as String)
         add[kSecValueData as String] = data
         add[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
-        let addStatus = SecItemAdd(add as CFDictionary, nil)
-        guard addStatus == errSecSuccess else { throw CryptoStoreError.keychain(addStatus) }
-        return Self(key: key)
+        let addStatus = addItem(add as CFDictionary, nil)
+        if addStatus == errSecSuccess { return Self(key: key) }
+        guard addStatus == errSecDuplicateItem else { throw CryptoStoreError.keychain(addStatus) }
+
+        // Another SmartClip process may have created the immutable history key
+        // after our initial lookup. Reuse that key instead of replacing it,
+        // which would make history written by the winning process unreadable.
+        result = nil
+        let retryStatus = copyItem(query as CFDictionary, &result)
+        guard retryStatus == errSecSuccess else { throw CryptoStoreError.keychain(retryStatus) }
+        guard let data = result as? Data, data.count == 32 else { throw CryptoStoreError.missingData }
+        return Self(key: SymmetricKey(data: data))
     }
 
     func seal(_ data: Data) throws -> Data {
