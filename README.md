@@ -11,12 +11,33 @@
   ![Apple Silicon](https://img.shields.io/badge/Apple%20Silicon-arm64-0b8f87?style=flat-square)
   [![MIT](https://img.shields.io/badge/license-MIT-0b8f87?style=flat-square)](LICENSE)
 
-  [Features](#features) · [Install](#install) · [Privacy](#privacy-by-design) · [Development](#development)
+  [Screenshots](#screenshots) · [Features](#features) · [Install](#install) · [Privacy](#privacy-by-design) · [Development](#development)
 </div>
 
 SmartClip lives in the menu bar and keeps copied text, links, code, images, and
 file references close at hand. Everything stays on your Mac: no account, cloud
 service, telemetry, or remote processing.
+
+## Screenshots
+
+SmartClip supports light and dark appearances, list and card layouts, and an
+optional experimental translucent interface.
+
+<p align="center">
+  <img src="docs/screenshots/clipboard-dark-translucent.jpg" width="820" alt="SmartClip clipboard history in the dark translucent appearance">
+</p>
+
+| Light list layout | Light card layout |
+| --- | --- |
+| <img src="docs/screenshots/clipboard-light-list.jpg" alt="SmartClip clipboard history in the light list layout"> | <img src="docs/screenshots/clipboard-light-cards.jpg" alt="SmartClip clipboard history in the light card layout"> |
+
+| General settings | History settings |
+| --- | --- |
+| <img src="docs/screenshots/settings-general.jpg" alt="SmartClip general settings with the experimental translucent interface option"> | <img src="docs/screenshots/settings-history.jpg" alt="SmartClip history layout, storage, and retention settings"> |
+
+| Privacy settings | About and updates |
+| --- | --- |
+| <img src="docs/screenshots/settings-privacy.jpg" alt="SmartClip sensitive-content and excluded-app privacy settings"> | <img src="docs/screenshots/settings-about.jpg" alt="SmartClip version, system requirements, and update controls"> |
 
 ## Why SmartClip?
 
