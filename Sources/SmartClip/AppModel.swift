@@ -25,6 +25,7 @@ final class AppModel: ObservableObject {
     @Published var timeFilter: HistoryTimeFilter = .all
     @Published var sourceBundleFilter: String?
     @Published var favoritesOnly = false
+    @Published var sensitiveOnly = false
     @Published var cardView: Bool
     @Published var relativeTimestamps: Bool
     @Published var darkMode: Bool
@@ -53,7 +54,7 @@ final class AppModel: ObservableObject {
     var accessibilityPermissionGranted: Bool { AXIsProcessTrusted() }
     var captureStatusLabel: String { isPaused ? pauseMode.label(now: now()) : captureState.label }
     var hasActiveHistoryRefinements: Bool {
-        timeFilter != .all || sourceBundleFilter != nil || favoritesOnly
+        timeFilter != .all || sourceBundleFilter != nil || favoritesOnly || sensitiveOnly
     }
 
     var captureState: CaptureState {
@@ -346,13 +347,15 @@ final class AppModel: ObservableObject {
         timeFilter = .all
         sourceBundleFilter = nil
         favoritesOnly = false
+        sensitiveOnly = false
         if refresh { applySearchImmediately() }
     }
 
     private var historyQuery: HistoryQuery {
         HistoryQuery(search: search, kind: filter,
                      copiedSince: timeFilter.startDate(now: now()),
-                     sourceBundleID: sourceBundleFilter, favoritesOnly: favoritesOnly)
+                     sourceBundleID: sourceBundleFilter, favoritesOnly: favoritesOnly,
+                     sensitiveOnly: sensitiveOnly)
     }
 
     func purge() throws {

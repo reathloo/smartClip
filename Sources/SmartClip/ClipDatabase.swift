@@ -159,6 +159,7 @@ final class ClipDatabase: @unchecked Sendable {
         if query.copiedSince != nil { predicates.append("last_copied >= ?") }
         if query.sourceBundleID != nil { predicates.append("source_bundle = ?") }
         if query.favoritesOnly { predicates.append("pinned = 1") }
+        if query.sensitiveOnly { predicates.append("sensitive = 1") }
         if let kind = query.kind {
             predicates.append(kind == .code ? "kind IN ('text', 'code')" : "kind = ?")
         }

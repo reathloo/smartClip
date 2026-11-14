@@ -412,18 +412,22 @@ func runCoreChecks() async throws {
                       source: "Safari", bundle: "com.apple.Safari")
         try f.capture(.text("recent Safari"), source: "Safari", bundle: "com.apple.Safari")
         try f.capture(.text("recent Terminal"), source: "Terminal", bundle: "com.apple.Terminal")
+        try f.capture(.text("recent sensitive"), sensitive: true, source: "Vault", bundle: "test.vault")
         let safari = try f.db.list(search: "recent Safari")[0]
         try f.db.setPinned(true, for: safari.id)
 
         let recent = try f.db.page(query: HistoryQuery(copiedSince: f.time.addingTimeInterval(-86_400)),
                                    after: nil, limit: 20).items
-        try expect(recent.count == 2 && !recent.contains(where: { $0.preview == "old Safari" }),
+        try expect(recent.count == 3 && !recent.contains(where: { $0.preview == "old Safari" }),
                    "Time refinement included old content")
         let terminal = try f.db.page(query: HistoryQuery(sourceBundleID: "com.apple.Terminal"),
                                      after: nil, limit: 20).items
         try expect(terminal.count == 1 && terminal.first?.sourceName == "Terminal", "Source refinement failed")
         let favorites = try f.db.page(query: HistoryQuery(favoritesOnly: true), after: nil, limit: 20).items
         try expect(favorites.count == 1 && favorites.first?.id == safari.id, "Favorite refinement failed")
+        let sensitive = try f.db.page(query: HistoryQuery(sensitiveOnly: true), after: nil, limit: 20).items
+        try expect(sensitive.count == 1 && sensitive.first?.sourceName == "Vault" && sensitive.first?.isSensitive == true,
+                   "Sensitive refinement failed")
     }
     integration("file-preview-metadata-is-local-and-complete") { f in
         let url = f.directory.appendingPathComponent("notes.txt")
@@ -681,12 +685,20 @@ func runCoreChecks() async throws {
     }
     integration("model.search-and-type-filter") { f in
         try f.capture(.text("find this")); try f.capture(.text("https://example.org"))
+        try f.capture(.text("hidden secret"), sensitive: true, source: "Vault")
         f.model.search = "find"; f.model.refresh()
         try expect(f.model.items.count == 1 && f.model.items[0].kind == .text, "Model search not applied")
         f.model.filter = .url; f.model.refresh()
         try expect(f.model.items.isEmpty, "Model filter ignored")
         f.model.search = ""; f.model.refresh()
         try expect(f.model.items.count == 1 && f.model.items[0].kind == .url, "Clearing search failed")
+        f.model.filter = nil
+        f.model.sensitiveOnly = true; f.model.refresh()
+        try expect(f.model.hasActiveHistoryRefinements && f.model.items.count == 1
+                   && f.model.items[0].isSensitive, "Model sensitive refinement failed")
+        f.model.resetHistoryRefinements()
+        try expect(!f.model.sensitiveOnly && !f.model.hasActiveHistoryRefinements && f.model.items.count == 3,
+                   "Reset did not clear the sensitive refinement")
     }
     integration("model.never-and-shorter-retention-settings") { f in
         try f.capture(.text("old"), at: f.time.addingTimeInterval(-400 * 86_400))
