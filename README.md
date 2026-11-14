@@ -91,7 +91,7 @@ Useful commands:
 ```sh
 zsh scripts/run-dev.sh          # build and restart the real app
 zsh scripts/run-dev.sh --ui     # isolated UI preview with sample data
-zsh scripts/test.sh             # run all 142 core checks
+zsh scripts/test.sh             # run all 143 core checks
 zsh scripts/build-app.sh        # create dist/SmartClip.app
 ```
 
