@@ -67,6 +67,9 @@ final class ShortcutRecorderView: NSView {
     var accentColor = AppearanceMode.light.accentNSColor {
         didSet { needsDisplay = true }
     }
+    var usesTranslucentStyle = false {
+        didSet { needsDisplay = true }
+    }
     private var recording = false
     private let label = NSTextField(labelWithString: "Record custom shortcut")
 
@@ -93,8 +96,10 @@ final class ShortcutRecorderView: NSView {
     override func updateLayer() {
         let dark = effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
         layer?.borderColor = recording ? accentColor.cgColor
-            : NSColor(white: dark ? 0.28 : 0.85, alpha: 1).cgColor
-        layer?.backgroundColor = NSColor(white: dark ? 0.15 : 0.975, alpha: 1).cgColor
+            : NSColor(white: dark ? 1 : 0, alpha: usesTranslucentStyle ? 0.22 : (dark ? 0.28 : 0.15)).cgColor
+        layer?.backgroundColor = usesTranslucentStyle
+            ? NSColor(white: dark ? 0 : 1, alpha: dark ? 0.18 : 0.10).cgColor
+            : NSColor(white: dark ? 0.15 : 0.975, alpha: 1).cgColor
     }
     override func viewDidChangeEffectiveAppearance() {
         super.viewDidChangeEffectiveAppearance()

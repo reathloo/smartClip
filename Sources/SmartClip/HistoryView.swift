@@ -49,10 +49,14 @@ struct HistoryView: View {
             }
         }
         .tint(theme.accent)
-        .background(theme.canvas)
+        .background {
+            SmartClipWindowBackground(enabled: model.transparentUI, mode: model.appearanceMode, palette: theme)
+                .ignoresSafeArea()
+        }
         .frame(minWidth: 560, minHeight: 540)
         .preferredColorScheme(model.appearanceMode.colorScheme)
         .environment(\.clipPalette, theme)
+        .environment(\.smartClipTranslucent, model.transparentUI)
         .environment(\.locale, Locale(identifier: "en_US"))
         .onChange(of: model.itemIDs) { _, ids in
             if let selectedID = model.selectedID, !ids.contains(selectedID) { model.selectedID = nil }
@@ -143,7 +147,7 @@ struct HistoryView: View {
     }
 
     @ViewBuilder private var chromeBackground: some View {
-        if reduceTransparency { theme.surface } else { Rectangle().fill(.ultraThinMaterial) }
+        SmartClipChromeBackground()
     }
 
     private var header: some View {
@@ -214,10 +218,15 @@ struct HistoryView: View {
             }
         }
         .padding(.horizontal, 12).frame(height: 38)
-        .background(theme.surface.opacity(reduceTransparency ? 1 : 0.82),
-                    in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .background {
+            SmartClipGlassSurfaceBackground()
+                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        }
         .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous)
-            .strokeBorder(searchFocused ? theme.accent.opacity(0.45) : theme.line))
+            .strokeBorder(searchFocused ? theme.accent.opacity(0.55)
+                          : model.transparentUI && !reduceTransparency
+                          ? Color.white.opacity(model.appearanceMode == .light ? 0.28 : 0.24)
+                          : theme.line))
         .shadow(color: searchFocused ? theme.accent.opacity(0.08) : .clear, radius: 5)
     }
 
@@ -355,9 +364,15 @@ struct HistoryView: View {
                         }
                     }
                 }
-                .background(theme.surface, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(theme.line))
-                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .background {
+                    SmartClipGlassSurfaceBackground()
+                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                }
+                .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .strokeBorder(model.transparentUI && !reduceTransparency
+                                  ? Color.white.opacity(model.appearanceMode == .light ? 0.26 : 0.22)
+                                  : theme.line))
+                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
             }
         }
     }
@@ -604,6 +619,7 @@ private struct HistoryScrollPositionKeeper: NSViewRepresentable {
 private struct ClipRow: View {
     @Environment(\.clipPalette) private var theme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     let model: AppModel
     let snapshot: ClipSummary
     // Lazy rows may retain their identity when moving between sections. Resolve
@@ -717,10 +733,14 @@ private struct ClipRow: View {
         }
         .padding(card ? 15 : 12)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(card ? theme.surface : .clear,
-                    in: RoundedRectangle(cornerRadius: card ? 12 : 0, style: .continuous))
+        .background {
+            if card {
+                SmartClipGlassSurfaceBackground()
+                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            }
+        }
         .overlay {
-            RoundedRectangle(cornerRadius: card ? 12 : 0, style: .continuous)
+            RoundedRectangle(cornerRadius: card ? 14 : 0, style: .continuous)
                 .fill(selected ? theme.selection
                       : hovered ? theme.accent.opacity(0.04)
                       : .clear)
@@ -728,9 +748,11 @@ private struct ClipRow: View {
         }
         .overlay {
             if card {
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
                     .strokeBorder(selected ? theme.accent.opacity(0.34)
                                   : hovered ? theme.accent.opacity(0.12)
+                                  : model.transparentUI && !reduceTransparency
+                                  ? Color.white.opacity(model.appearanceMode == .light ? 0.26 : 0.22)
                                   : theme.line)
                     .allowsHitTesting(false)
             }
@@ -740,7 +762,8 @@ private struct ClipRow: View {
                 Capsule().fill(theme.accent).frame(width: 3).padding(.vertical, 9)
             }
         }
-        .shadow(color: card ? .black.opacity(0.035) : .clear, radius: 5, y: 2)
+        .shadow(color: card ? .black.opacity(model.transparentUI ? 0.13 : 0.035) : .clear,
+                radius: model.transparentUI ? 10 : 5, y: model.transparentUI ? 5 : 2)
         .onHover { hovered = $0 }
         .animation(reduceMotion ? nil : .easeOut(duration: 0.12), value: hovered)
         .modifier(ClipDragModifier(model: model, item: item))

@@ -70,14 +70,118 @@ enum ClipTheme {
     }
 }
 
+struct SmartClipVisualEffect: NSViewRepresentable {
+    let material: NSVisualEffectView.Material
+    let blendingMode: NSVisualEffectView.BlendingMode
+    let opacity: CGFloat
+
+    func makeNSView(context: Context) -> NSVisualEffectView {
+        let view = NSVisualEffectView()
+        view.state = .active
+        view.material = material
+        view.blendingMode = blendingMode
+        view.alphaValue = opacity
+        return view
+    }
+
+    func updateNSView(_ view: NSVisualEffectView, context: Context) {
+        view.state = .active
+        view.material = material
+        view.blendingMode = blendingMode
+        view.alphaValue = opacity
+    }
+}
+
+struct SmartClipWindowBackground: View {
+    let enabled: Bool
+    let mode: AppearanceMode
+    let palette: ClipPalette
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+
+    var body: some View {
+        if enabled && !reduceTransparency {
+            ZStack {
+                SmartClipVisualEffect(
+                    material: mode == .light ? .underWindowBackground : .hudWindow,
+                    blendingMode: .behindWindow,
+                    opacity: mode == .light ? 0.96 : 0.92
+                )
+                Rectangle().fill(mode == .light
+                                 ? palette.canvas.opacity(0.015)
+                                 : Color.black.opacity(0.10))
+                LinearGradient(
+                    colors: [Color.white.opacity(mode == .light ? 0.035 : 0.018), .clear],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            }
+        } else {
+            palette.canvas
+        }
+    }
+}
+
+struct SmartClipGlassSurfaceBackground: View {
+    @Environment(\.clipPalette) private var palette
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    @Environment(\.smartClipTranslucent) private var translucent
+
+    var body: some View {
+        if translucent && !reduceTransparency {
+            ZStack {
+                Rectangle().fill(colorScheme == .light
+                                 ? Color.white.opacity(0.27)
+                                 : Color.black.opacity(0.34))
+                Rectangle().fill(palette.surface.opacity(colorScheme == .light ? 0.025 : 0.035))
+                LinearGradient(
+                    colors: [Color.white.opacity(colorScheme == .light ? 0.055 : 0.022), .clear],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            }
+        } else {
+            palette.surface
+        }
+    }
+}
+
+struct SmartClipChromeBackground: View {
+    @Environment(\.clipPalette) private var palette
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    @Environment(\.smartClipTranslucent) private var translucent
+
+    var body: some View {
+        if reduceTransparency {
+            palette.surface
+        } else if translucent {
+            Rectangle().fill(colorScheme == .light
+                             ? Color.white.opacity(0.10)
+                             : Color.black.opacity(0.14))
+        } else {
+            Rectangle().fill(.ultraThinMaterial)
+        }
+    }
+}
+
 private struct ClipPaletteKey: EnvironmentKey {
     static let defaultValue = ClipTheme.palette(for: .light)
+}
+
+private struct SmartClipTranslucentKey: EnvironmentKey {
+    static let defaultValue = false
 }
 
 extension EnvironmentValues {
     var clipPalette: ClipPalette {
         get { self[ClipPaletteKey.self] }
         set { self[ClipPaletteKey.self] = newValue }
+    }
+
+    var smartClipTranslucent: Bool {
+        get { self[SmartClipTranslucentKey.self] }
+        set { self[SmartClipTranslucentKey.self] = newValue }
     }
 }
 
