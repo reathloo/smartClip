@@ -29,6 +29,13 @@ enum AppearanceMode: String, CaseIterable, Identifiable, Sendable {
         case .forest: NSColor(srgbRed: 0.45, green: 0.80, blue: 0.73, alpha: 1)
         }
     }
+    var windowNSColor: NSColor {
+        switch self {
+        case .light: NSColor(srgbRed: 0.95, green: 0.96, blue: 0.96, alpha: 1)
+        case .midnight: NSColor(srgbRed: 0.08, green: 0.09, blue: 0.10, alpha: 1)
+        case .forest: NSColor(srgbRed: 0.10, green: 0.12, blue: 0.11, alpha: 1)
+        }
+    }
 }
 
 struct ClipPalette: Equatable {
