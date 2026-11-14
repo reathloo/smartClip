@@ -56,6 +56,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem?
     private var panel: HistoryPanel?
     private var pauseObservation: AnyCancellable?
+    private var panelAppearanceObservation: AnyCancellable?
     private var updaterController: SPUStandardUpdaterController?
 
     private var isUITestSession: Bool {
@@ -120,6 +121,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         item.button?.sendAction(on: [.leftMouseUp])
         statusItem = item
         pauseObservation = model.$pauseMode.sink { [weak self] _ in self?.updateStatusItemAppearance() }
+        panelAppearanceObservation = Publishers.CombineLatest(
+            model.$transparentUI.removeDuplicates(),
+            model.$appearanceMode.removeDuplicates()
+        ).sink { [weak self] enabled, mode in
+            self?.panel?.setAppearance(transparencyEnabled: enabled, mode: mode)
+        }
         if !model.onboardingComplete { showSettings() }
         #if DEBUG
         if testSession != nil { toggleHistory() }
@@ -196,6 +203,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         if panel == nil {
             let panel = HistoryPanel()
+            panel.setAppearance(transparencyEnabled: model.transparentUI, mode: model.appearanceMode)
             panel.contentView = NSHostingView(rootView: SmartClipWindowContent(model: model))
             panel.commandHandler = { [weak self] event in self?.handlePanelCommand(event) ?? false }
             panel.center()
@@ -277,6 +285,28 @@ final class HistoryPanel: NSPanel {
         hidesOnDeactivate = true
         hasShadow = true
         collectionBehavior = [.fullScreenAuxiliary]
+    }
+
+    func setAppearance(transparencyEnabled enabled: Bool, mode: AppearanceMode) {
+        if enabled {
+            styleMask.insert(.fullSizeContentView)
+        } else {
+            styleMask.remove(.fullSizeContentView)
+        }
+        isOpaque = !enabled
+        backgroundColor = mode.windowNSColor.withAlphaComponent(enabled ? 0.58 : 1)
+        appearance = NSAppearance(named: mode == .light ? .aqua : .darkAqua)
+        // The standard title-bar material lightens dark custom appearances to gray.
+        // Keep the native controls, but let the selected SmartClip theme provide the fill.
+        titlebarAppearsTransparent = true
+        titleVisibility = enabled ? .hidden : .visible
+        if let titlebarView = standardWindowButton(.closeButton)?.superview {
+            titlebarView.wantsLayer = true
+            titlebarView.layer?.backgroundColor = mode.windowNSColor
+                .withAlphaComponent(enabled && mode == .light ? 0.86 : 1)
+                .cgColor
+        }
+        invalidateShadow()
     }
 
     override var canBecomeKey: Bool { true }
