@@ -37,7 +37,11 @@ stop_app() {
   local -a pids
 
   find_pids() {
-    ps -axo pid=,command= | awk -v target="$executable" '$2 == target { print $1 }'
+    ps -axo pid=,command= | awk -v target="$executable" '{
+      pid = $1
+      sub(/^[[:space:]]*[0-9]+[[:space:]]+/, "")
+      if ($0 == target) print pid
+    }'
   }
 
   pids=("${(@f)$(find_pids)}")
