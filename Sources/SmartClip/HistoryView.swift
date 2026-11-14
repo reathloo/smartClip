@@ -272,6 +272,9 @@ struct HistoryView: View {
             refinementOption("Favorites only", selected: model.favoritesOnly) {
                 model.favoritesOnly.toggle()
             }
+            refinementOption("Sensitive only", selected: model.sensitiveOnly) {
+                model.sensitiveOnly.toggle()
+            }
             if model.hasActiveHistoryRefinements {
                 Button("Clear refinements") {
                     model.resetHistoryRefinements()

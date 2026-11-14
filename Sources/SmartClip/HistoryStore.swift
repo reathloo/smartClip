@@ -6,6 +6,7 @@ struct HistoryQuery: Sendable, Equatable {
     var copiedSince: Date?
     var sourceBundleID: String?
     var favoritesOnly = false
+    var sensitiveOnly = false
 }
 
 enum HistoryTimeFilter: String, CaseIterable, Identifiable, Sendable, Equatable {
