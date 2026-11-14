@@ -519,13 +519,16 @@ func runCoreChecks() async throws {
         try expect(f.model.shortcut == nil && !f.model.autoPaste && !f.model.onboardingComplete, "Unsafe first-run default")
         try expect(f.model.normalDays == 30 && f.model.sensitiveSeconds == 3_600, "Wrong retention default")
         try expect(!f.model.relativeTimestamps, "Relative timestamps should be opt-in")
+        try expect(!f.model.transparentUI, "Transparent interface should be opt-in")
         f.model.setCardView(true); f.model.setDarkMode(true); f.model.setPaused(true); f.model.setNormalDays(90)
         f.model.setRelativeTimestamps(true)
+        f.model.setTransparentUI(true)
         f.model.setSensitiveSeconds(300); f.model.setExcluded("  test.excluded  ", excluded: true)
         f.model.setExcluded("   ", excluded: true); f.model.setMonitoring(true)
         let reloaded = AppModel(defaults: f.defaults, pasteboard: f.pasteboard)
         try expect(reloaded.cardView && reloaded.darkMode && reloaded.appearanceMode == .midnight
-                   && reloaded.relativeTimestamps && reloaded.isPaused && reloaded.onboardingComplete,
+                   && reloaded.relativeTimestamps && reloaded.transparentUI
+                   && reloaded.isPaused && reloaded.onboardingComplete,
                    "Settings not persisted")
         try expect(reloaded.normalDays == 90 && reloaded.sensitiveSeconds == 300, "Retention not persisted")
         try expect(reloaded.excludedBundles == ["test.excluded"], "Exclusions not trimmed/persisted")

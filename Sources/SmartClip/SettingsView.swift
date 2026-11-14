@@ -194,6 +194,18 @@ struct SettingsView: View {
                 }
             }
             if !model.onboardingComplete { onboardingCard }
+            SettingsCard("Appearance", symbol: "circle.lefthalf.filled") {
+                settingToggle(
+                    "Translucent interface (Experimental)",
+                    detail: "Uses a modern frosted-glass background in every appearance.",
+                    value: Binding(get: { model.transparentUI }, set: { model.setTransparentUI($0) })
+                )
+                if reduceTransparency {
+                    Text("macOS Reduce Transparency is active, so SmartClip keeps the background solid.")
+                        .font(.system(size: 11)).foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
             SettingsCard("Behavior", symbol: "cursorarrow.click") {
                 settingToggle("Paste automatically", detail: "Pastes the selected entry into the previously active app.",
                               value: Binding(get: { model.autoPaste }, set: { model.setAutoPaste($0) }))

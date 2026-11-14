@@ -30,6 +30,7 @@ final class AppModel: ObservableObject {
     @Published var relativeTimestamps: Bool
     @Published var darkMode: Bool
     @Published var appearanceMode: AppearanceMode
+    @Published var transparentUI: Bool
     @Published var statusMessage = ""
     @Published private(set) var copyConfirmationMessage: String?
     @Published private(set) var recoveryAction: RecoveryAction?
@@ -106,6 +107,7 @@ final class AppModel: ObservableObject {
             ?? (defaults.bool(forKey: "darkMode") ? .midnight : .light)
         appearanceMode = initialAppearance
         darkMode = initialAppearance != .light
+        transparentUI = defaults.bool(forKey: "transparentUI")
         pauseMode = defaults.bool(forKey: "paused") ? .manual : .active
         recoveryAction = nil
         normalDays = defaults.object(forKey: "normalDays") as? Int ?? 30
@@ -832,6 +834,10 @@ final class AppModel: ObservableObject {
         darkMode = mode != .light
         defaults.set(mode.rawValue, forKey: "appearanceMode")
         defaults.set(darkMode, forKey: "darkMode")
+    }
+    func setTransparentUI(_ value: Bool) {
+        transparentUI = value
+        defaults.set(value, forKey: "transparentUI")
     }
     func setNormalDays(_ value: Int) {
         normalDays = value; defaults.set(value, forKey: "normalDays")
