@@ -74,13 +74,20 @@ struct SettingsView: View {
                 .padding(.horizontal, 30).padding(.vertical, 26)
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .background(theme.canvas)
+            .background {
+                SmartClipWindowBackground(enabled: model.transparentUI, mode: model.appearanceMode, palette: theme)
+                    .ignoresSafeArea()
+            }
         }
         .tint(theme.accent)
-        .background(theme.canvas)
+        .background {
+            SmartClipWindowBackground(enabled: model.transparentUI, mode: model.appearanceMode, palette: theme)
+                .ignoresSafeArea()
+        }
         .frame(minWidth: 700, minHeight: 580)
         .preferredColorScheme(model.appearanceMode.colorScheme)
         .environment(\.clipPalette, theme)
+        .environment(\.smartClipTranslucent, model.transparentUI)
         .environment(\.locale, Locale(identifier: "en_US"))
         .alert("Delete all history?", isPresented: $confirmDeleteAll) {
             Button("Delete all", role: .destructive) { model.deleteAllHistory() }
@@ -161,7 +168,12 @@ struct SettingsView: View {
         .frame(width: 210)
         .frame(maxHeight: .infinity)
         .background {
-            if reduceTransparency { theme.sidebar } else { Rectangle().fill(.thinMaterial) }
+            if reduceTransparency { theme.sidebar }
+            else if model.transparentUI {
+                Rectangle().fill(model.appearanceMode == .light
+                                 ? Color.white.opacity(0.10)
+                                 : Color.black.opacity(0.16))
+            } else { Rectangle().fill(.thinMaterial) }
         }
         .overlay(alignment: .trailing) { Rectangle().fill(theme.line).frame(width: 1) }
     }
@@ -563,6 +575,9 @@ enum AppInfo {
 
 private struct SettingsCard<Content: View>: View {
     @Environment(\.clipPalette) private var theme
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    @Environment(\.smartClipTranslucent) private var translucent
     let title: String
     let symbol: String
     @ViewBuilder let content: Content
@@ -580,9 +595,16 @@ private struct SettingsCard<Content: View>: View {
             content
         }
         .padding(18).frame(maxWidth: .infinity, alignment: .leading)
-        .background(theme.surface, in: RoundedRectangle(cornerRadius: 13, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 13, style: .continuous).strokeBorder(theme.line))
-        .shadow(color: .black.opacity(0.035), radius: 8, y: 3)
+        .background {
+            SmartClipGlassSurfaceBackground()
+                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        }
+        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous)
+            .strokeBorder(translucent && !reduceTransparency
+                          ? Color.white.opacity(colorScheme == .light ? 0.28 : 0.24)
+                          : theme.line))
+        .shadow(color: .black.opacity(translucent ? 0.13 : 0.035),
+                radius: translucent ? 11 : 8, y: translucent ? 5 : 3)
     }
 }
 
@@ -595,5 +617,6 @@ private struct ShortcutRecorder: NSViewRepresentable {
     }
     func updateNSView(_ nsView: ShortcutRecorderView, context: Context) {
         nsView.accentColor = model.appearanceMode.accentNSColor
+        nsView.usesTranslucentStyle = model.transparentUI
     }
 }
