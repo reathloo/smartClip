@@ -194,6 +194,25 @@ func runCoreChecks() async throws {
         }
         try expect(a.digest(Data("a".utf8)) != b.digest(Data("a".utf8)), "Digest not key-specific")
     }
+    test("crypto.keychain-create-race-reuses-existing-key") {
+        let existingKey = SymmetricKey(size: .bits256)
+        let existingData = existingKey.withUnsafeBytes { Data($0) }
+        var reads = 0
+        let store = try CryptoStore.loadOrCreate(
+            copyItem: { _, result in
+                reads += 1
+                guard reads > 1 else { return errSecItemNotFound }
+                result?.pointee = existingData as CFData
+                return errSecSuccess
+            },
+            addItem: { _, _ in errSecDuplicateItem }
+        )
+        let plaintext = Data("race-safe history".utf8)
+        let expected = CryptoStore(key: existingKey)
+        try expect(try expected.open(store.seal(plaintext)) == plaintext,
+                   "Duplicate key creation did not reuse the existing key")
+        try expect(reads == 2, "Duplicate key creation did not retry the lookup")
+    }
     for days in [7, 30, 90, 365] {
         test("retention.normal-\(days)-boundary") {
             let start = Date(timeIntervalSince1970: 0)
