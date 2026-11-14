@@ -1,12 +1,12 @@
 # SmartClip Test Report and Reproducible Verification
 
-Last updated: November 8, 2026.
+Last updated: November 14, 2026.
 
 ## Result
 
-Run the automated suite with `zsh scripts/test.sh`. It contains **125 named checks** with multiple assertions. Machine-readable results are written to `.build/test-results/core.json`; console output is written to `.build/test-results/core.log`.
+Run the automated suite with `zsh scripts/test.sh`. It contains **143 named checks** with multiple assertions. Machine-readable results are written to `.build/test-results/core.json`; console output is written to `.build/test-results/core.log`.
 
-The initial 54-check run reproduced five failures. All five were fixed, and later integration coverage expanded the suite. UI checks are separate and are not counted among the 125 automated checks.
+The initial 54-check run reproduced five failures. All five were fixed, and later integration coverage expanded the suite. UI checks are separate and are not counted among the 143 automated checks.
 
 Tests use random temporary databases, isolated UserDefaults suites, named private pasteboards, and generated keys. They do not read real clipboard history or access the real Keychain. The shortcut check temporarily registers ⌃⌥⇧⌘F18/F19 and releases both combinations afterward. It fails with an explanation if another process already owns either shortcut.
 
@@ -28,16 +28,16 @@ Sensitive values receive a ConcealedType marker when copied. Hotkey handlers and
 | Area | Evidence | Limit |
 | --- | --- | --- |
 | Text, URL, email | Positive and negative classification, Unicode and NUL round trips, pasteboard representations | No semantic check that a URL is reachable |
-| Password managers and cards | Concealed, Transient, and 1Password markers; valid and invalid Luhn numbers | Arbitrary unmarked passwords cannot be detected reliably |
-| Images | PNG and TIFF reading, copying, decoding, 20 MiB limit, corrupt data | Not every image format or decompression-bomb scenario |
+| Password managers, credentials, and cards | Concealed, Transient, and 1Password markers; common credential formats; valid and invalid Luhn numbers | Heuristic detection cannot identify every unmarked secret and can produce false positives |
+| Images | PNG and TIFF reading, copying, bounded thumbnail decoding, 20 MiB limit, corrupt data | Not every image format or decompression-bomb scenario |
 | Files | Multiple original references, missing originals, round trip, clipboard preserved on failure | Finder end-to-end check remains manual |
-| Encryption | Empty, small, and 1 MiB payloads; random nonces; wrong key; tampering; truncated data | No independent security audit |
+| Encryption | Empty, small, and 1 MiB payloads; random nonces; wrong key; tampering; truncated data; concurrent Keychain creation | Bounded source and dependency review, but no independent third-party security audit |
 | Storage | Every type in SQLite, reopen, encrypted content in DB and WAL, corrupt record | Type, time, and app name metadata remain unencrypted |
 | Duplicates, favorites, and notes | Text, image, and file groups; count, time, source, pin, encrypted names and notes, search | UI ordering also checked interactively |
-| Search and filters | Content and app name, case handling, type filter, limit, results beyond first page | Sensitive plaintext intentionally excluded from search |
+| Search and filters | Content and app name, case handling, type, time, source, favorite, and sensitive filters, limit, results beyond first page | Sensitive plaintext intentionally excluded from search |
 | Retention | Every preset at its exact boundary, never, favorites, recopy, setting changes, expired retrieval | Controlled time rather than a multi-day real-time run |
 | Capture | Onboarding, manual and timed pauses, restart pause, changeCount, exclusions, denied access, self-copy suppression | Operating-system permission state is simulated |
-| Settings | Safe defaults and persistent view, pause, retention, exclusions, and onboarding | Launch at login and Accessibility permissions are not changed automatically |
+| Settings | Safe defaults and persistent view, timestamp style, experimental translucency, pause, retention, exclusions, and onboarding | Launch at login and Accessibility permissions are not changed automatically |
 | Copy | Original and masked values, URLs, email, images, files, Concealed marker, failure preservation | Automatic paste into third-party apps remains manual |
 | Shortcut | Native registration, conflict, failed replacement, removal, release, callback | Physical global key routing remains manual |
 | Window | Native close and minimize controls, movable and resizable panel, minimum size, reuse | Visibility, dragging, minimizing, and reopening need interactive confirmation |
@@ -66,6 +66,8 @@ The following behavior was checked in `.build/SmartClip Test.app`:
 - Cmd-F focuses search while normal opening leaves the field unfocused.
 - The first 100 entries load immediately and the remaining page loads explicitly without duplicates.
 - Storage usage, quota selection, keep-favorites cleanup, and the sensitive-storage policy are exposed in Settings.
+- Sensitive-only filtering shows concealed entries without revealing their payloads or private metadata.
+- Experimental translucency was checked in Light, Midnight, and Forest, including solid and translucent title-bar colors.
 
 Computer control sometimes activated the additional SwiftUI settings window after hiding the panel. This is not complete proof of global reopening, minimizing, or window-position persistence; those remain in the manual checklist.
 
@@ -121,3 +123,5 @@ SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX26.5.sdk swift run SmartC
 - **History responsiveness, October 30, 2026:** expanded to 114 checks. Unchanged history refreshes no longer publish another list update; search focus and row rendering were checked in the local test app.
 - **History store and workflow upgrade, November 7, 2026:** expanded to 120 checks. SQLite and encryption run behind an actor-isolated store; coverage now includes stable pagination, storage quota and statistics, keep-favorites cleanup, sensitive-content opt-out, preview selection, and safe drag representations.
 - **Encrypted entry notes and concealment hardening, November 8, 2026:** expanded to 123 checks. Notes are encrypted independently, survive deduplication, participate in regular-entry search, stay concealed for sensitive entries, respect storage quotas, and are removed with their entry. Delayed preview loads and cached multi-file drag handles are revoked when sensitive content is concealed.
+- **Privacy and history responsiveness, November 13, 2026:** expanded to 142 checks. Coverage includes credential heuristics, pre-decode SQL refinements, bounded image thumbnails, cached navigation identifiers, timestamp preferences, scroll-position retention, and menu-bar reopening behavior.
+- **Release security review, November 14, 2026:** expanded to 143 checks. Concurrent first-run Keychain creation now reuses the existing immutable history key. The full repository history was scanned with Gitleaks, the release binary was checked for common secret patterns, Sparkle advisories were reviewed, and the complete v0.4.0 DMG verification passed.
