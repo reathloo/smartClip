@@ -136,7 +136,7 @@ UI プレビューは専用のペーストボードと分離された一時デ�
 を公開します。
 
 ```sh
-zsh scripts/package-release.sh v0.4.0
+zsh scripts/package-release.sh v0.5.0
 ```
 
 詳しくは[リリースガイド](docs/RELEASE.md)、[テストレポート](docs/TEST_REPORT.md)、

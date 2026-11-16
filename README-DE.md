@@ -139,7 +139,7 @@ Sparkle EdDSA, erstellt ein GitHub Release und veröffentlicht den Appcast über
 GitHub Pages.
 
 ```sh
-zsh scripts/package-release.sh v0.4.0
+zsh scripts/package-release.sh v0.5.0
 ```
 
 Weitere Einzelheiten findest du in der [Release-Anleitung](docs/RELEASE.md), im
