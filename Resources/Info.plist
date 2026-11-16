@@ -5,6 +5,15 @@
     <key>CFBundleDisplayName</key><string>SmartClip</string>
     <key>CFBundleIdentifier</key><string>dev.smartclip.SmartClip</string>
     <key>CFBundleExecutable</key><string>SmartClip</string>
+    <key>CFBundleDevelopmentRegion</key><string>en</string>
+    <key>CFBundleLocalizations</key>
+    <array>
+        <string>en</string>
+        <string>de</string>
+        <string>zh-Hans</string>
+        <string>ja</string>
+        <string>ko</string>
+    </array>
     <key>CFBundleIconFile</key><string>AppIcon</string>
     <key>CFBundlePackageType</key><string>APPL</string>
     <key>CFBundleShortVersionString</key><string>0.4.0</string>

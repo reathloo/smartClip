@@ -46,7 +46,7 @@ final class UITestSession {
                        sourceName: "Finder", sourceBundleID: nil, sensitive: false)
         model.setMonitoring(true)
         model.refresh()
-        model.showStatus("Test mode: sample data and a separate clipboard.")
+        model.showStatus(L10n.text("Test mode: sample data and a separate clipboard."))
     }
 
     func cleanup() {

@@ -86,7 +86,7 @@ private func snapshot<V: View>(_ view: V, size: NSSize, scheme: ColorScheme, to 
                           styleMask: [.borderless], backing: .buffered, defer: false)
     window.isReleasedWhenClosed = false
     window.appearance = NSAppearance(named: scheme == .dark ? .darkAqua : .aqua)
-    let host = NSHostingView(rootView: view.environment(\.colorScheme, scheme).environment(\.locale, Locale(identifier: "en_US")))
+    let host = NSHostingView(rootView: view.environment(\.colorScheme, scheme))
     host.frame = NSRect(origin: .zero, size: size)
     window.contentView = host
     host.layoutSubtreeIfNeeded()

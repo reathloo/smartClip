@@ -9,9 +9,9 @@ enum AppearanceMode: String, CaseIterable, Identifiable, Sendable {
     var id: String { rawValue }
     var label: String {
         switch self {
-        case .light: "Light"
-        case .midnight: "Midnight"
-        case .forest: "Forest"
+        case .light: L10n.text("Light")
+        case .midnight: L10n.text("Midnight")
+        case .forest: L10n.text("Forest")
         }
     }
     var symbol: String {
@@ -307,8 +307,8 @@ struct AppearancePicker: View {
         .menuStyle(.borderlessButton)
         .menuIndicator(.hidden)
         .buttonStyle(IconControlStyle())
-        .help("Appearance: \(mode.label)")
-        .accessibilityLabel("Choose appearance. Current theme: \(mode.label)")
+        .help(L10n.text("Appearance: %@", mode.label))
+        .accessibilityLabel(L10n.text("Choose appearance. Current theme: %@", mode.label))
     }
 }
 

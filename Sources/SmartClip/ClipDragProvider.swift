@@ -94,12 +94,12 @@ enum ClipDragProvider {
 
     private static func suggestedName(for item: ClipSummary) -> String {
         switch item.kind {
-        case .text: "SmartClip Text"
-        case .code: "SmartClip Code"
+        case .text: L10n.text("SmartClip Text")
+        case .code: L10n.text("SmartClip Code")
         case .url: "SmartClip URL"
-        case .email: "SmartClip Email"
-        case .image: "SmartClip Image.png"
-        case .files: "SmartClip Files"
+        case .email: L10n.text("SmartClip Email")
+        case .image: L10n.text("SmartClip Image.png")
+        case .files: L10n.text("SmartClip Files")
         }
     }
 }
@@ -131,8 +131,8 @@ final class MultiFileDragSourceView: NSView, NSDraggingSource {
         addSubview(imageView)
         setAccessibilityElement(true)
         setAccessibilityRole(.button)
-        setAccessibilityLabel("Drag all files")
-        toolTip = "Drag all files"
+        setAccessibilityLabel(L10n.text("Drag all files"))
+        toolTip = L10n.text("Drag all files")
     }
 
     required init?(coder: NSCoder) { nil }
@@ -161,6 +161,6 @@ private enum DragProviderError: LocalizedError {
     case unavailable
 
     var errorDescription: String? {
-        "This SmartClip entry is no longer available."
+        L10n.text("This SmartClip entry is no longer available.")
     }
 }
