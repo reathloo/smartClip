@@ -12,7 +12,7 @@ struct FilePreviewMetadata: Equatable {
         guard let attributes = try? fileManager.attributesOfItem(atPath: url.path) else {
             return FilePreviewMetadata(typeLabel: nil, byteCount: nil, modifiedAt: nil)
         }
-        let typeLabel = UTType(filenameExtension: url.pathExtension)?.localizedDescription ?? "File"
+        let typeLabel = UTType(filenameExtension: url.pathExtension)?.localizedDescription ?? L10n.text("File")
         let byteCount = (attributes[.size] as? NSNumber)?.int64Value
         let modifiedAt = attributes[.modificationDate] as? Date
         return FilePreviewMetadata(typeLabel: typeLabel, byteCount: byteCount, modifiedAt: modifiedAt)
@@ -23,9 +23,7 @@ struct FilePreviewMetadata: Equatable {
         if let typeLabel { parts.append(typeLabel) }
         if let byteCount { parts.append(ByteCountFormatter.string(fromByteCount: byteCount, countStyle: .file)) }
         if let modifiedAt {
-            parts.append("Modified " + modifiedAt.formatted(
-                Date.FormatStyle(date: .abbreviated, time: .shortened, locale: Locale(identifier: "en_US"))
-            ))
+            parts.append(L10n.text("Modified %@", modifiedAt.formatted(date: .abbreviated, time: .shortened)))
         }
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
@@ -116,7 +114,7 @@ struct ClipPreviewView: View {
                     .buttonStyle(.bordered)
                     .controlSize(.small)
             }
-            Button(item.isSensitive && !revealedSensitive ? "Reveal" : "Copy",
+            Button(item.isSensitive && !revealedSensitive ? L10n.text("Reveal") : L10n.text("Copy"),
                    systemImage: item.isSensitive && !revealedSensitive ? "eye" : "doc.on.doc") {
                 if item.isSensitive && !revealedSensitive {
                     reveal()
@@ -179,7 +177,7 @@ struct ClipPreviewView: View {
                     .foregroundStyle(savedNote.isEmpty ? Color.secondary : theme.accent)
                 Spacer()
                 if !editingNote {
-                    Button(savedNote.isEmpty ? "Add note" : "Edit") {
+                    Button(savedNote.isEmpty ? L10n.text("Add note") : L10n.text("Edit")) {
                         noteDraft = savedNote
                         editingNote = true
                     }
@@ -211,7 +209,7 @@ struct ClipPreviewView: View {
                         editingNote = false
                     }
                     .buttonStyle(.plain)
-                    Button(savedNote.isEmpty ? "Save note" : "Save") { persistNote() }
+                    Button(savedNote.isEmpty ? L10n.text("Save note") : L10n.text("Save")) { persistNote() }
                         .buttonStyle(.borderedProminent)
                         .controlSize(.small)
                         .disabled(isSavingNote)
@@ -349,8 +347,9 @@ struct ClipPreviewView: View {
     }
 
     private var metadataLabel: String {
-        let source = item.sourceName ?? "Unknown app"
-        return "\(source) · \((item.firstCapturedAt ?? item.lastCopiedAt).formatted(.relative(presentation: .named)))"
+        let source = item.sourceName ?? L10n.text("Unknown app")
+        return L10n.text("%@ · %@", source,
+                         (item.firstCapturedAt ?? item.lastCopiedAt).formatted(.relative(presentation: .named)))
     }
 
     private func reveal() {

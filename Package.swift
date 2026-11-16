@@ -3,6 +3,7 @@ import PackageDescription
 
 let package = Package(
     name: "SmartClip",
+    defaultLocalization: "en",
     platforms: [.macOS(.v14)],
     products: [.executable(name: "SmartClip", targets: ["SmartClip"])],
     dependencies: [
@@ -15,6 +16,9 @@ let package = Package(
             dependencies: [
                 "CSQLite",
                 .product(name: "Sparkle", package: "Sparkle")
+            ],
+            resources: [
+                .process("Localization")
             ],
             linkerSettings: [
                 .linkedFramework("AppKit"),

@@ -71,7 +71,7 @@ final class ShortcutRecorderView: NSView {
         didSet { needsDisplay = true }
     }
     private var recording = false
-    private let label = NSTextField(labelWithString: "Record custom shortcut")
+    private let label = NSTextField(labelWithString: L10n.text("Record custom shortcut"))
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -90,7 +90,7 @@ final class ShortcutRecorderView: NSView {
             label.leadingAnchor.constraint(greaterThanOrEqualTo: leadingAnchor, constant: 10)
         ])
         setAccessibilityRole(.button)
-        setAccessibilityLabel("Eigenes Keyboard shortcut aufnehmen")
+        setAccessibilityLabel(L10n.text("Record custom shortcut"))
     }
     override var wantsUpdateLayer: Bool { true }
     override func updateLayer() {
@@ -110,14 +110,14 @@ final class ShortcutRecorderView: NSView {
     override func mouseDown(with event: NSEvent) {
         window?.makeFirstResponder(self)
         recording = true
-        label.stringValue = "Press shortcut…"
+        label.stringValue = L10n.text("Press shortcut…")
         needsDisplay = true
     }
     override func keyDown(with event: NSEvent) {
         guard recording else { return }
         if event.keyCode == UInt16(kVK_Escape) {
             recording = false
-            label.stringValue = "Record custom shortcut"
+            label.stringValue = L10n.text("Record custom shortcut")
             needsDisplay = true
             return
         }
@@ -129,7 +129,7 @@ final class ShortcutRecorderView: NSView {
         if flags.contains(.control) { modifiers |= UInt32(controlKey) }
         guard flags.contains(.command) || flags.contains(.control) || flags.contains(.option),
               let key = event.charactersIgnoringModifiers?.uppercased(), key.count == 1 else {
-            label.stringValue = "Choose ⌘, ⌃, or ⌥ plus a key"
+            label.stringValue = L10n.text("Choose ⌘, ⌃, or ⌥ plus a key")
             return
         }
         let display = "\(flags.contains(.control) ? "⌃" : "")\(flags.contains(.option) ? "⌥" : "")\(flags.contains(.shift) ? "⇧" : "")\(flags.contains(.command) ? "⌘" : "")\(key)"

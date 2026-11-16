@@ -147,15 +147,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func makeStatusMenu() -> NSMenu {
         let menu = NSMenu()
         if model.isPaused {
-            menu.addItem(withTitle: "Resume capture", action: #selector(resumeCapture), keyEquivalent: "")
+            menu.addItem(withTitle: L10n.text("Resume capture"), action: #selector(resumeCapture), keyEquivalent: "")
             menu.addItem(.separator())
         }
-        menu.addItem(withTitle: "Pause for 15 minutes", action: #selector(pauseFor15Minutes), keyEquivalent: "")
-        menu.addItem(withTitle: "Pause until next launch", action: #selector(pauseUntilNextLaunch), keyEquivalent: "")
+        menu.addItem(withTitle: L10n.text("Pause for 15 minutes"), action: #selector(pauseFor15Minutes), keyEquivalent: "")
+        menu.addItem(withTitle: L10n.text("Pause until next launch"), action: #selector(pauseUntilNextLaunch), keyEquivalent: "")
         menu.addItem(.separator())
-        menu.addItem(withTitle: "Check for Updates …", action: #selector(checkForUpdates), keyEquivalent: "")
-        menu.addItem(withTitle: "Settings …", action: #selector(openSettingsFromMenu), keyEquivalent: ",")
-        menu.addItem(withTitle: "Quit SmartClip", action: #selector(quitFromMenu), keyEquivalent: "q")
+        menu.addItem(withTitle: L10n.text("Check for Updates …"), action: #selector(checkForUpdates), keyEquivalent: "")
+        menu.addItem(withTitle: L10n.text("Settings …"), action: #selector(openSettingsFromMenu), keyEquivalent: ",")
+        menu.addItem(withTitle: L10n.text("Quit SmartClip"), action: #selector(quitFromMenu), keyEquivalent: "q")
         for item in menu.items { item.target = self }
         return menu
     }

@@ -1,0 +1,68 @@
+name: Bug report
+description: Report a reproducible problem in SmartClip
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a problem. Remove clipboard contents, credentials, and personal information before attaching logs or screenshots. Follow SECURITY.md to report vulnerabilities privately instead.
+  - type: input
+    id: version
+    attributes:
+      label: SmartClip version
+      description: Find this in Settings → About SmartClip.
+      placeholder: 0.4.0
+    validations:
+      required: true
+  - type: input
+    id: macos
+    attributes:
+      label: macOS version and Mac model
+      placeholder: macOS 14.7, MacBook Pro with M2
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: What happened?
+      description: Explain the observed behavior and what you expected instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open …
+        2. Copy …
+        3. Select …
+    validations:
+      required: true
+  - type: dropdown
+    id: frequency
+    attributes:
+      label: How often does it happen?
+      options:
+        - Every time
+        - Intermittently
+        - Once
+    validations:
+      required: true
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Additional context
+      description: Add sanitized screenshots, logs, or relevant settings. Never include real clipboard contents or secrets.
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checklist
+      options:
+        - label: I tested the latest published SmartClip release.
+          required: true
+        - label: I searched existing issues for this problem.
+          required: true
+        - label: This report contains no passwords, tokens, personal data, or other sensitive clipboard content.
+          required: true

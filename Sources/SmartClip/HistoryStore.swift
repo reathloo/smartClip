@@ -19,10 +19,10 @@ enum HistoryTimeFilter: String, CaseIterable, Identifiable, Sendable, Equatable 
 
     var label: String {
         switch self {
-        case .all: "Any time"
-        case .today: "Today"
-        case .week: "Past 7 days"
-        case .month: "Past 30 days"
+        case .all: L10n.text("Any time")
+        case .today: L10n.text("Today")
+        case .week: L10n.text("Past 7 days")
+        case .month: L10n.text("Past 30 days")
         }
     }
 
