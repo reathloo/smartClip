@@ -1,5 +1,9 @@
 # SmartClip
 
+<p align="center">
+  <strong>English</strong> · <a href="README-DE.md">Deutsch</a> · <a href="README-ZH.md">中文</a> · <a href="README-JA.md">日本語</a> · <a href="README-KO.md">한국어</a>
+</p>
+
 <div align="center">
   <img src="Resources/AppIcon.png" width="112" alt="SmartClip app icon">
 
@@ -11,7 +15,7 @@
   ![Apple Silicon](https://img.shields.io/badge/Apple%20Silicon-arm64-0b8f87?style=flat-square)
   [![MIT](https://img.shields.io/badge/license-MIT-0b8f87?style=flat-square)](LICENSE)
 
-  [Screenshots](#screenshots) · [Features](#features) · [Install](#install) · [Privacy](#privacy-by-design) · [Development](#development)
+  [Screenshots](#screenshots) · [Features](#features) · [Install](#install) · [Privacy](#privacy-by-design) · [Development](#development) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md)
 </div>
 
 SmartClip lives in the menu bar and keeps copied text, links, code, images, and
@@ -47,6 +51,8 @@ optional experimental translucent interface.
   shortcut, then search and copy without leaving your workflow.
 - **Native on macOS.** Built with SwiftUI and AppKit, with light and dark modes,
   launch at login, native keyboard behavior, and Accessibility-aware paste.
+- **Localized interface.** Follows the preferred macOS app language in English,
+  German, Simplified Chinese, Japanese, and Korean.
 - **Careful with sensitive data.** Concealed clipboard markers, valid card
   numbers, and common credential formats are masked and receive shorter
   retention limits.
