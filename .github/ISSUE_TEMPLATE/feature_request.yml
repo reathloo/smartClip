@@ -1,0 +1,43 @@
+name: Feature request
+description: Suggest a focused improvement to SmartClip
+title: "[Feature]: "
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Describe the workflow problem first. A clear use case makes it easier to evaluate the smallest maintainable solution.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or workflow
+      description: What are you trying to accomplish, and what currently makes it difficult?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+      description: Explain how the feature should work from a user's perspective.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Describe existing SmartClip features or other approaches you tried.
+  - type: textarea
+    id: privacy
+    attributes:
+      label: Privacy and security considerations
+      description: Does the proposal change clipboard access, stored data, permissions, networking, or external services?
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checklist
+      options:
+        - label: I searched existing issues for a similar request.
+          required: true
+        - label: This request does not contain real clipboard contents, credentials, or personal data.
+          required: true
