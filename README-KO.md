@@ -135,7 +135,7 @@ UI 미리보기는 별도의 클립보드와 격리된 임시 데이터를 사�
 GitHub Pages를 통한 appcast 게시를 수행합니다.
 
 ```sh
-zsh scripts/package-release.sh v0.4.0
+zsh scripts/package-release.sh v0.5.0
 ```
 
 전체 내용은 [릴리스 안내](docs/RELEASE.md), [테스트 보고서](docs/TEST_REPORT.md),

@@ -129,7 +129,7 @@ zsh scripts/build-app.sh        # 创建 dist/SmartClip.app
 GitHub Pages 发布 appcast。
 
 ```sh
-zsh scripts/package-release.sh v0.4.0
+zsh scripts/package-release.sh v0.5.0
 ```
 
 完整信息请参阅[发布指南](docs/RELEASE.md)、[测试报告](docs/TEST_REPORT.md)

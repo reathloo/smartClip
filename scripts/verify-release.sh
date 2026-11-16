@@ -56,6 +56,14 @@ minimum="$(/usr/libexec/PlistBuddy -c 'Print :LSMinimumSystemVersion' "$app/Cont
   print -u2 "Sparkle license is missing from the app"
   exit 1
 }
+for language in en de zh-Hans ja ko; do
+  strings="$app/Contents/Resources/$language.lproj/Localizable.strings"
+  [[ -f "$strings" ]] || {
+    print -u2 "Localization is missing from the app: $language"
+    exit 1
+  }
+  /usr/bin/plutil -lint "$strings" >/dev/null
+done
 /usr/bin/otool -L "$app/Contents/MacOS/SmartClip" | /usr/bin/grep -q '@rpath/Sparkle.framework'
 feed="$(/usr/libexec/PlistBuddy -c 'Print :SUFeedURL' "$app/Contents/Info.plist")"
 public_key="$(/usr/libexec/PlistBuddy -c 'Print :SUPublicEDKey' "$app/Contents/Info.plist")"
@@ -75,4 +83,4 @@ if [[ "$assessment" != *"rejected"* ]]; then
   exit 1
 fi
 
-print "Package verification passed: app, styled DMG, checksum, architecture, Sparkle, and expected Gatekeeper warning."
+print "Package verification passed: app, styled DMG, checksum, architecture, localizations, Sparkle, and expected Gatekeeper warning."
