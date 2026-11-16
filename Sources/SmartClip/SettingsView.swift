@@ -2,8 +2,16 @@ import AppKit
 import SwiftUI
 
 enum SettingsTab: String, CaseIterable, Identifiable {
-    case general = "General", history = "History", privacy = "Privacy", about = "About SmartClip"
+    case general, history, privacy, about
     var id: String { rawValue }
+    var title: String {
+        switch self {
+        case .general: L10n.text("General")
+        case .history: L10n.text("History")
+        case .privacy: L10n.text("Privacy")
+        case .about: L10n.text("About SmartClip")
+        }
+    }
     var symbol: String {
         switch self {
         case .general: "slider.horizontal.3"
@@ -14,10 +22,10 @@ enum SettingsTab: String, CaseIterable, Identifiable {
     }
     var subtitle: String {
         switch self {
-        case .general: "Make SmartClip fit your workflow."
-        case .history: "Keep your history for as long as you need it."
-        case .privacy: "You decide what gets stored."
-        case .about: "Version, requirements, and helpful links."
+        case .general: L10n.text("Make SmartClip fit your workflow.")
+        case .history: L10n.text("Keep your history for as long as you need it.")
+        case .privacy: L10n.text("You decide what gets stored.")
+        case .about: L10n.text("Version, requirements, and helpful links.")
         }
     }
 }
@@ -44,7 +52,7 @@ struct SettingsView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
                     VStack(alignment: .leading, spacing: 5) {
-                        Text(tab.rawValue).font(.system(size: 24, weight: .semibold))
+                        Text(tab.title).font(.system(size: 24, weight: .semibold))
                         Text(tab.subtitle).font(.system(size: 12)).foregroundStyle(.secondary)
                     }
                     .padding(.bottom, 3)
@@ -88,7 +96,6 @@ struct SettingsView: View {
         .preferredColorScheme(model.appearanceMode.colorScheme)
         .environment(\.clipPalette, theme)
         .environment(\.smartClipTranslucent, model.transparentUI)
-        .environment(\.locale, Locale(identifier: "en_US"))
         .alert("Delete all history?", isPresented: $confirmDeleteAll) {
             Button("Delete all", role: .destructive) { model.deleteAllHistory() }
             Button("Cancel", role: .cancel) {}
@@ -134,7 +141,7 @@ struct SettingsView: View {
                 Button {
                     withAnimation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 1)) { tab = item }
                 } label: {
-                    Label(item.rawValue, systemImage: item.symbol)
+                    Label(item.title, systemImage: item.symbol)
                         .font(.system(size: 12, weight: tab == item ? .semibold : .regular))
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.horizontal, 11).padding(.vertical, 10)
@@ -234,7 +241,7 @@ struct SettingsView: View {
                 settingRow("Automatic paste", detail: model.accessibilityPermissionGranted
                            ? "Accessibility access is available."
                            : "Accessibility access is needed to paste into the previous app.") {
-                    Label(model.accessibilityPermissionGranted ? "Ready" : "Needs access",
+                    Label(model.accessibilityPermissionGranted ? L10n.text("Ready") : L10n.text("Needs access"),
                           systemImage: model.accessibilityPermissionGranted ? "checkmark.circle.fill" : "exclamationmark.circle")
                         .font(.system(size: 11, weight: .medium))
                         .foregroundStyle(model.accessibilityPermissionGranted ? theme.accent : Color.orange)
@@ -304,7 +311,7 @@ struct SettingsView: View {
                     HStack {
                         Text(storageUsageLabel).font(.system(size: 12, weight: .medium))
                         Spacer()
-                        Text("\(model.storageStatistics.itemCount) entries")
+                        Text(L10n.text("%@ entries", String(model.storageStatistics.itemCount)))
                             .font(.system(size: 10)).foregroundStyle(.secondary)
                     }
                     if model.storageLimitBytes > 0 {
@@ -312,7 +319,8 @@ struct SettingsView: View {
                                                 / Double(max(1, model.storageLimitBytes))))
                             .tint(model.storageStatistics.contentBytes > model.storageLimitBytes ? .orange : theme.accent)
                     }
-                    Text("Disk usage: \(formatBytes(model.storageStatistics.diskBytes)). Pinned entries are never removed automatically.")
+                    Text(L10n.text("Disk usage: %@. Pinned entries are never removed automatically.",
+                                   formatBytes(model.storageStatistics.diskBytes)))
                         .font(.system(size: 11)).foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -493,8 +501,8 @@ struct SettingsView: View {
             HStack(spacing: 12) {
                 Image(systemName: symbol).foregroundStyle(theme.accent).frame(width: 18)
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(title).font(.system(size: 12, weight: .medium)).foregroundStyle(.primary)
-                    Text(detail).font(.system(size: 11)).foregroundStyle(.secondary)
+                    Text(L10n.text(title)).font(.system(size: 12, weight: .medium)).foregroundStyle(.primary)
+                    Text(L10n.text(detail)).font(.system(size: 11)).foregroundStyle(.secondary)
                 }
                 Spacer()
                 Image(systemName: "arrow.up.right")
@@ -502,7 +510,7 @@ struct SettingsView: View {
             }
             .contentShape(Rectangle())
         }
-        .buttonStyle(ResponsiveButtonStyle()).accessibilityLabel("Open \(title)")
+        .buttonStyle(ResponsiveButtonStyle()).accessibilityLabel(L10n.text("Open %@", L10n.text(title)))
         .padding(.vertical, 2)
     }
 
@@ -514,7 +522,7 @@ struct SettingsView: View {
                 if bundle != name { Text(bundle).font(.system(size: 10)).foregroundStyle(.secondary).lineLimit(1) }
             }
             Spacer()
-            Toggle("Exclude \(name)", isOn: Binding(
+            Toggle(L10n.text("Exclude %@", name), isOn: Binding(
                 get: { model.excludedBundles.contains(bundle) },
                 set: { model.setExcluded(bundle, excluded: $0) }))
                 .labelsHidden().toggleStyle(.switch).controlSize(.small)
@@ -529,15 +537,15 @@ struct SettingsView: View {
 
     private func settingToggle(_ title: String, detail: String, value: Binding<Bool>) -> some View {
         settingRow(title, detail: detail) {
-            Toggle(title, isOn: value).labelsHidden().toggleStyle(.switch).controlSize(.small)
+            Toggle(L10n.text(title), isOn: value).labelsHidden().toggleStyle(.switch).controlSize(.small)
         }
     }
 
     private func settingRow<Control: View>(_ title: String, detail: String, @ViewBuilder control: () -> Control) -> some View {
         HStack(spacing: 18) {
             VStack(alignment: .leading, spacing: 4) {
-                Text(title).font(.system(size: 12, weight: .medium))
-                Text(detail).font(.system(size: 11)).foregroundStyle(.secondary)
+                Text(L10n.text(title)).font(.system(size: 12, weight: .medium))
+                Text(L10n.text(detail)).font(.system(size: 11)).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -548,15 +556,15 @@ struct SettingsView: View {
     private func note(_ symbol: String, _ text: String) -> some View {
         HStack(alignment: .top, spacing: 9) {
             Image(systemName: symbol).font(.system(size: 12)).frame(width: 15)
-            Text(text).font(.system(size: 11)).lineSpacing(2).fixedSize(horizontal: false, vertical: true)
+            Text(L10n.text(text)).font(.system(size: 11)).lineSpacing(2).fixedSize(horizontal: false, vertical: true)
         }
         .foregroundStyle(.secondary).frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var storageUsageLabel: String {
         let used = formatBytes(model.storageStatistics.contentBytes)
-        guard model.storageLimitBytes > 0 else { return "\(used) encrypted content" }
-        return "\(used) of \(formatBytes(model.storageLimitBytes))"
+        guard model.storageLimitBytes > 0 else { return L10n.text("%@ encrypted content", used) }
+        return L10n.text("%@ of %@", used, formatBytes(model.storageLimitBytes))
     }
 
     private func formatBytes(_ bytes: Int64) -> String {
@@ -566,10 +574,10 @@ struct SettingsView: View {
 
 enum AppInfo {
     static var versionLabel: String {
-        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "Development"
+        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? L10n.text("Development")
         guard let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String,
-              !build.isEmpty else { return "Version \(version)" }
-        return "Version \(version) · Build \(build)"
+              !build.isEmpty else { return L10n.text("Version %@", version) }
+        return L10n.text("Version %@ · Build %@", version, build)
     }
 }
 
@@ -590,7 +598,7 @@ private struct SettingsCard<Content: View>: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Label(title, systemImage: symbol)
+            Label(L10n.text(title), systemImage: symbol)
                 .font(.system(size: 12, weight: .semibold)).foregroundStyle(.secondary)
             content
         }

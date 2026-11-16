@@ -6,12 +6,12 @@ enum ClipKind: String, Codable, CaseIterable, Identifiable, Sendable {
     var id: String { rawValue }
     var label: String {
         switch self {
-        case .text: "Text"
-        case .code: "Code"
+        case .text: L10n.text("Text")
+        case .code: L10n.text("Code")
         case .url: "URL"
-        case .email: "Email"
-        case .image: "Image"
-        case .files: "Files"
+        case .email: L10n.text("Email")
+        case .image: L10n.text("Image")
+        case .files: L10n.text("Files")
         }
     }
     var symbol: String {
@@ -58,7 +58,7 @@ struct ClipPayload: Codable, Equatable, Sendable {
     var preview: String {
         switch kind {
         case .text, .code, .url, .email: text ?? ""
-        case .image: "Image"
+        case .image: L10n.text("Image")
         case .files: filePaths?.map { URL(fileURLWithPath: $0).lastPathComponent }.joined(separator: ", ") ?? ""
         }
     }

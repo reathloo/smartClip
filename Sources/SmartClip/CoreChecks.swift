@@ -1148,12 +1148,13 @@ func runCoreChecks() async throws {
     integration("menu-bar.pause-actions") { f in
         let delegate = AppDelegate(model: f.model)
         var titles = delegate.makeStatusMenu().items.map(\.title)
-        try expect(titles.contains("Pause for 15 minutes") && titles.contains("Pause until next launch"),
+        try expect(titles.contains(L10n.text("Pause for 15 minutes"))
+                   && titles.contains(L10n.text("Pause until next launch")),
                    "Menu-bar pause actions missing")
-        try expect(titles.contains("Check for Updates …"), "Menu-bar update action missing")
+        try expect(titles.contains(L10n.text("Check for Updates …")), "Menu-bar update action missing")
         f.model.pauseUntilRestart()
         titles = delegate.makeStatusMenu().items.map(\.title)
-        try expect(titles.first == "Resume capture", "Paused menu cannot resume capture")
+        try expect(titles.first == L10n.text("Resume capture"), "Paused menu cannot resume capture")
     }
 
     func startupTest(_ name: String, _ body: (Fixture) async throws -> Void) async {
@@ -1173,7 +1174,7 @@ func runCoreChecks() async throws {
         await model.start(databaseURL: f.directory.appendingPathComponent("startup.sqlite")) {
             throw CryptoStoreError.keychain(-25293)
         }
-        try expect(model.statusMessage.contains("Could not open history"), "Key failure hidden")
+        try expect(model.statusMessage.contains(L10n.text("Could not open history: %@", "")), "Key failure hidden")
         model.setMonitoring(true); try f.write("not stored")
         model.processChanges(sourceName: nil, sourceBundleID: nil)
         try expect(model.items.isEmpty, "Recording started without a key")
@@ -1189,11 +1190,11 @@ func runCoreChecks() async throws {
         } }
         try await Task.sleep(for: .milliseconds(30))
         let responsive = Date().timeIntervalSince(start) < 1
-        let waiting = model.statusMessage.contains("Keychain")
+        let waiting = model.statusMessage == L10n.text("Opening protected history… approve Keychain access if requested.")
         gate.signal()
         await task.value
         try expect(responsive && waiting, "Main actor blocked while loading key")
-        try expect(model.statusMessage == "History ready.", "Successful startup not completed")
+        try expect(model.statusMessage == L10n.text("History ready."), "Successful startup not completed")
         model.setMonitoring(true); try f.write("after startup")
         await model.processChangesAndWait(sourceName: "Test", sourceBundleID: "test.startup")
         try expect(model.items.count == 1, "Capture unavailable after startup")

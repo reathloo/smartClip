@@ -57,7 +57,6 @@ struct HistoryView: View {
         .preferredColorScheme(model.appearanceMode.colorScheme)
         .environment(\.clipPalette, theme)
         .environment(\.smartClipTranslucent, model.transparentUI)
-        .environment(\.locale, Locale(identifier: "en_US"))
         .onChange(of: model.itemIDs) { _, ids in
             if let selectedID = model.selectedID, !ids.contains(selectedID) { model.selectedID = nil }
             if let previewedID = model.previewedID, !ids.contains(previewedID) { model.previewedID = nil }
@@ -185,7 +184,7 @@ struct HistoryView: View {
                 .background(model.cardView == cards ? theme.surface : .clear,
                             in: RoundedRectangle(cornerRadius: 6))
         }
-        .buttonStyle(ResponsiveButtonStyle()).help(title).accessibilityLabel(title)
+        .buttonStyle(ResponsiveButtonStyle()).help(L10n.text(title)).accessibilityLabel(L10n.text(title))
         .accessibilityAddTraits(model.cardView == cards ? .isSelected : [])
     }
 
@@ -253,7 +252,9 @@ struct HistoryView: View {
         }
         .buttonStyle(.plain)
         .help("Refine history")
-        .accessibilityLabel(model.hasActiveHistoryRefinements ? "Refine history, filters active" : "Refine history")
+        .accessibilityLabel(model.hasActiveHistoryRefinements
+                            ? L10n.text("Refine history, filters active")
+                            : L10n.text("Refine history"))
         .popover(isPresented: $showingRefinements, arrowEdge: .bottom) { refinementPanel }
     }
 
@@ -300,7 +301,7 @@ struct HistoryView: View {
 
     private func refinementSection<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(title).font(.system(size: 10, weight: .semibold)).foregroundStyle(.secondary)
+            Text(L10n.text(title)).font(.system(size: 10, weight: .semibold)).foregroundStyle(.secondary)
             content()
         }
     }
@@ -312,7 +313,7 @@ struct HistoryView: View {
             model.applySearchImmediately()
         } label: {
             HStack {
-                Text(title)
+                Text(L10n.text(title))
                 Spacer()
                 if selected { Image(systemName: "checkmark") }
             }
@@ -330,7 +331,7 @@ struct HistoryView: View {
         } label: {
             HStack(spacing: 5) {
                 Image(systemName: symbol).font(.system(size: 10, weight: .medium))
-                Text(title).font(.system(size: 11, weight: active ? .semibold : .medium))
+                Text(L10n.text(title)).font(.system(size: 11, weight: active ? .semibold : .medium))
             }
             .padding(.horizontal, 10).padding(.vertical, 6)
             .foregroundStyle(active ? Color.white : Color.secondary)
@@ -348,7 +349,7 @@ struct HistoryView: View {
         if !items.isEmpty {
             HStack(spacing: 6) {
                 if pinned { Image(systemName: "pin.fill").font(.system(size: 10)) }
-                Text(title).font(.system(size: 11, weight: .semibold))
+                Text(L10n.text(title)).font(.system(size: 11, weight: .semibold))
                 Spacer()
                 Text("\(items.count)").font(.system(size: 10, weight: .medium, design: .monospaced))
             }
@@ -390,30 +391,30 @@ struct HistoryView: View {
         let message: String
         let symbol: String
         if searching {
-            title = "No matching entries"
-            message = "Try another search term or reset the filters."
+            title = L10n.text("No matching entries")
+            message = L10n.text("Try another search term or reset the filters.")
             symbol = "magnifyingglass"
         } else {
             switch state {
             case .unavailable:
-                title = "History is not available yet"
-                message = "Check whether macOS is waiting for Keychain approval."
+                title = L10n.text("History is not available yet")
+                message = L10n.text("Check whether macOS is waiting for Keychain approval.")
                 symbol = "lock"
             case .setup:
-                title = "Your clipboard, within reach"
-                message = "Set up SmartClip and enable capture."
+                title = L10n.text("Your clipboard, within reach")
+                message = L10n.text("Set up SmartClip and enable capture.")
                 symbol = "doc.on.clipboard"
             case .paused:
-                title = "Capture paused"
-                message = "Resume capture to store new copies."
+                title = L10n.text("Capture paused")
+                message = L10n.text("Resume capture to store new copies.")
                 symbol = "pause"
             case .denied:
-                title = "Clipboard access is blocked"
-                message = "Allow SmartClip access in macOS System Settings."
+                title = L10n.text("Clipboard access is blocked")
+                message = L10n.text("Allow SmartClip access in macOS System Settings.")
                 symbol = "hand.raised"
             case .active:
-                title = "Room for your next ideas"
-                message = "Copy text, an image, or a file.\nSmartClip keeps it ready for you here."
+                title = L10n.text("Room for your next ideas")
+                message = L10n.text("Copy text, an image, or a file.\nSmartClip keeps it ready for you here.")
                 symbol = "doc.on.clipboard"
             }
         }
@@ -440,7 +441,7 @@ struct HistoryView: View {
                 Button("Set up SmartClip") { model.onOpenSettings?() }
                     .buttonStyle(.bordered).padding(.top, 4)
             } else if state == .denied || state == .unavailable, model.recoveryAction != nil {
-                Button(model.recoveryAction?.title ?? "Resolve issue") { model.performRecovery() }
+                Button(model.recoveryAction?.title ?? L10n.text("Resolve issue")) { model.performRecovery() }
                     .buttonStyle(.bordered).padding(.top, 4)
             }
         }
@@ -487,7 +488,9 @@ struct HistoryView: View {
                 KeyboardHint(text: "↑ ↓")
                 Text("Select").font(.system(size: 10)).foregroundStyle(.secondary)
                 KeyboardHint(text: "↵")
-                Text(selectedItem == nil && !searchText.isEmpty ? "Search" : model.autoPaste ? "Paste" : "Copy")
+                Text(selectedItem == nil && !searchText.isEmpty
+                     ? L10n.text("Search")
+                     : model.autoPaste ? L10n.text("Paste") : L10n.text("Copy"))
                     .font(.system(size: 10)).foregroundStyle(.secondary)
                 Menu {
                     Button("Settings") { model.onOpenSettings?() }
@@ -515,12 +518,12 @@ struct HistoryView: View {
         if model.hasMoreHistory || model.isLoadingHistory {
             HStack(spacing: 10) {
                 if model.isLoadingHistory { ProgressView().controlSize(.small) }
-                Button(model.isLoadingHistory ? "Loading…" : "Load 100 older entries") {
+                Button(model.isLoadingHistory ? L10n.text("Loading…") : L10n.text("Load 100 older entries")) {
                     model.loadMoreHistory()
                 }
                 .buttonStyle(.bordered)
                 .disabled(model.isLoadingHistory)
-                Text("Showing \(model.items.count)")
+                Text(L10n.text("Showing %@", String(model.items.count)))
                     .font(.system(size: 10)).foregroundStyle(.secondary)
             }
             .padding(.vertical, 16)
@@ -636,6 +639,14 @@ private struct ClipRow: View {
     @State private var hovered = false
     @State private var dragFileURLs: [URL] = []
 
+    private var accessibilityDescription: String {
+        var parts: [String] = []
+        if let favoriteName = item.favoriteName { parts.append(favoriteName) }
+        parts.append("\(item.kind.label): \(item.isSensitive ? L10n.text("sensitive entry") : item.preview)")
+        if item.hasNote { parts.append(L10n.text("has note")) }
+        return parts.joined(separator: ", ")
+    }
+
     var body: some View {
         HStack(alignment: .top, spacing: 8) {
             Button { model.copy(item) } label: {
@@ -658,7 +669,7 @@ private struct ClipRow: View {
                             Text("••••••••••••").font(.system(size: 12, design: .monospaced)).foregroundStyle(.secondary)
                         } else {
                             if item.kind == .code {
-                                Text(item.codeLanguage ?? "Unknown language")
+                                Text(item.codeLanguage ?? L10n.text("Unknown language"))
                                     .font(.system(size: 10, weight: .semibold))
                                     .foregroundStyle(ClipKind.code.color(in: theme))
                                     .help("Language estimated automatically from syntax")
@@ -672,7 +683,7 @@ private struct ClipRow: View {
                             ClipImagePreview(model: model, id: item.id)
                         }
                         if item.hasNote {
-                            Label(item.isSensitive ? "Encrypted note" : item.note ?? "Note",
+                            Label(item.isSensitive ? L10n.text("Encrypted note") : item.note ?? L10n.text("Note"),
                                   systemImage: "note.text")
                                 .font(.system(size: 10, weight: .medium))
                                 .foregroundStyle(.secondary)
@@ -680,7 +691,7 @@ private struct ClipRow: View {
                         }
                         HStack(spacing: 5) {
                             SourceAppIcon(bundleID: item.sourceBundleID, size: 13)
-                            Text(item.sourceName ?? "Unknown app").help("Source app estimated at copy time")
+                            Text(item.sourceName ?? L10n.text("Unknown app")).help("Source app estimated at copy time")
                             Text("·").foregroundStyle(.tertiary)
                             timestampText
                             if item.hasMissingFiles {
@@ -698,7 +709,7 @@ private struct ClipRow: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(ResponsiveButtonStyle(showsHoverBackground: false))
-            .accessibilityLabel("\(item.favoriteName.map { "\($0), " } ?? "")\(item.kind.label): \(item.isSensitive ? "sensitive entry" : item.preview)\(item.hasNote ? ", has note" : "")")
+            .accessibilityLabel(accessibilityDescription)
             .accessibilityAddTraits(selected ? .isSelected : [])
             VStack(alignment: .trailing, spacing: 7) {
                 HStack(spacing: 2) {
@@ -722,8 +733,8 @@ private struct ClipRow: View {
                     .buttonStyle(IconControlStyle())
                     .foregroundStyle(item.isPinned ? theme.accent : Color.secondary)
                     .opacity(item.isPinned || hovered || selected ? 1 : 0.65)
-                    .help(item.isPinned ? "Unpin" : "Pin")
-                    .accessibilityLabel(item.isPinned ? "Unpin entry" : "Pin entry")
+                    .help(item.isPinned ? L10n.text("Unpin") : L10n.text("Pin"))
+                    .accessibilityLabel(item.isPinned ? L10n.text("Unpin entry") : L10n.text("Pin entry"))
                     actions
                 }
                 if item.copyCount > 1 {
@@ -781,13 +792,13 @@ private struct ClipRow: View {
             Text("This entry will then use the regular retention period. A pinned entry remains until you delete it manually.")
         }
         .confirmationDialog("Exclude this app in the future?", isPresented: $confirmExclude) {
-            Button("Exclude \(item.sourceName ?? "this app")", role: .destructive) {
+            Button(L10n.text("Exclude %@", item.sourceName ?? L10n.text("this app")), role: .destructive) {
                 model.excludeSourceApp(of: item)
             }
         } message: {
             Text("New copies from this app will no longer be stored. Existing entries remain.")
         }
-        .alert(item.favoriteName == nil ? "Name favorite" : "Rename favorite",
+        .alert(item.favoriteName == nil ? L10n.text("Name favorite") : L10n.text("Rename favorite"),
                isPresented: $editFavoriteName) {
             TextField("Name", text: $favoriteDraft)
             Button("Save") { model.nameFavorite(item, favoriteDraft) }
@@ -812,8 +823,8 @@ private struct ClipRow: View {
         Menu {
             Button("Copy", systemImage: "doc.on.doc") { model.copy(item) }
             if item.kind == .url { Button("Open URL", systemImage: "arrow.up.right") { model.openURL(item) } }
-            Button(item.isPinned ? "Unpin" : "Pin", systemImage: "pin") { model.pin(item) }
-            Button(item.favoriteName == nil ? "Name favorite …" : "Rename favorite …",
+            Button(item.isPinned ? L10n.text("Unpin") : L10n.text("Pin"), systemImage: "pin") { model.pin(item) }
+            Button(item.favoriteName == nil ? L10n.text("Name favorite …") : L10n.text("Rename favorite …"),
                    systemImage: "tag") {
                 favoriteDraft = item.favoriteName ?? ""
                 editFavoriteName = true
@@ -821,15 +832,15 @@ private struct ClipRow: View {
             if item.favoriteName != nil {
                 Button("Remove favorite name", systemImage: "tag.slash") { model.nameFavorite(item, "") }
             }
-            Button(item.hasNote ? "View note" : "Add note …", systemImage: "note.text") { onPreview() }
-            Button(item.isSensitive ? "Mark as regular" : "Mark as sensitive", systemImage: "lock") {
+            Button(item.hasNote ? L10n.text("View note") : L10n.text("Add note …"), systemImage: "note.text") { onPreview() }
+            Button(item.isSensitive ? L10n.text("Mark as regular") : L10n.text("Mark as sensitive"), systemImage: "lock") {
                 if item.isSensitive { confirmUnmark = true }
                 else { model.markSensitive(item, true) }
             }
             retentionMenu
             if item.sourceBundleID != nil {
                 Divider()
-                Button("Exclude \(item.sourceName ?? "source app") in the future", systemImage: "app.badge") {
+                Button(L10n.text("Exclude %@ in the future", item.sourceName ?? L10n.text("source app")), systemImage: "app.badge") {
                     confirmExclude = true
                 }
             }
@@ -865,9 +876,9 @@ private struct ClipRow: View {
             model.setRetentionOverride(seconds, for: item)
         } label: {
             if item.retentionOverrideSeconds == seconds {
-                Label(title, systemImage: "checkmark")
+                Label(L10n.text(title), systemImage: "checkmark")
             } else {
-                Text(title)
+                Text(L10n.text(title))
             }
         }
     }
@@ -876,11 +887,11 @@ private struct ClipRow: View {
         if let deletionDate = item.deletionDate(normalDays: model.normalDays == 0 ? nil : model.normalDays,
                                                 sensitiveSeconds: TimeInterval(model.sensitiveSeconds)) {
             Label {
-                Text("Delete: \(deletionDate.formatted(Date.FormatStyle(date: .abbreviated, time: .shortened, locale: Locale(identifier: "en_US"))))")
+                Text(L10n.text("Delete: %@", deletionDate.formatted(date: .abbreviated, time: .shortened)))
             } icon: {
                 Image(systemName: "clock")
             }
-            .help("Scheduled deletion: \(deletionDate.formatted(Date.FormatStyle(date: .long, time: .shortened, locale: Locale(identifier: "en_US"))))")
+            .help(L10n.text("Scheduled deletion: %@", deletionDate.formatted(date: .long, time: .shortened)))
             .font(.system(size: 10)).foregroundStyle(.secondary)
         } else {
             Label("No automatic deletion", systemImage: "infinity")

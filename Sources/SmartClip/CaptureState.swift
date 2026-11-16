@@ -5,11 +5,11 @@ enum CaptureState {
 
     var label: String {
         switch self {
-        case .unavailable: "History not ready"
-        case .setup: "Not set up yet"
-        case .paused: "Paused"
-        case .denied: "Access blocked"
-        case .active: "Capture active"
+        case .unavailable: L10n.text("History not ready")
+        case .setup: L10n.text("Not set up yet")
+        case .paused: L10n.text("Paused")
+        case .denied: L10n.text("Access blocked")
+        case .active: L10n.text("Capture active")
         }
     }
 }
@@ -24,10 +24,10 @@ enum PauseMode: Equatable {
 
     func label(now: Date = .now) -> String {
         switch self {
-        case .active: "Capture active"
-        case .manual: "Paused"
-        case .until(let date): "Paused until \(date.formatted(Date.FormatStyle(date: .omitted, time: .shortened, locale: Locale(identifier: "en_US"))))"
-        case .untilRestart: "Paused until next launch"
+        case .active: L10n.text("Capture active")
+        case .manual: L10n.text("Paused")
+        case .until(let date): L10n.text("Paused until %@", date.formatted(date: .omitted, time: .shortened))
+        case .untilRestart: L10n.text("Paused until next launch")
         }
     }
 }
@@ -40,9 +40,9 @@ enum RecoveryAction: Equatable {
 
     var title: String {
         switch self {
-        case .retryStorage: "Try again"
-        case .openClipboardSettings, .openAccessibilitySettings: "Open System Settings"
-        case .openSmartClipSettings: "Change shortcut"
+        case .retryStorage: L10n.text("Try again")
+        case .openClipboardSettings, .openAccessibilitySettings: L10n.text("Open System Settings")
+        case .openSmartClipSettings: L10n.text("Change shortcut")
         }
     }
 }

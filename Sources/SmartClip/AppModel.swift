@@ -146,7 +146,7 @@ final class AppModel: ObservableObject {
                keyLoader: @escaping @Sendable () throws -> CryptoStore = { try CryptoStore.loadOrCreate() }) async {
         // Keep the menu and shortcut usable while macOS waits for Keychain approval.
         if let shortcut { setShortcut(shortcut) }
-        showStatus("Opening protected history… approve Keychain access if requested.")
+        showStatus(L10n.text("Opening protected history… approve Keychain access if requested."))
         do {
             let crypto = try await Task.detached(priority: .userInitiated) { try keyLoader() }.value
             let url: URL
@@ -166,12 +166,12 @@ final class AppModel: ObservableObject {
             knownApps = try await store.knownApps()
             storageStatistics = try await store.statistics()
             storageReady = true
-            showStatus("History ready.")
+            showStatus(L10n.text("History ready."))
         } catch {
             database = nil
             historyStore = nil
             storageReady = false
-            showStatus("Could not open history: \(error.localizedDescription)", recovery: .retryStorage)
+            showStatus(L10n.text("Could not open history: %@", error.localizedDescription), recovery: .retryStorage)
             return
         }
         pollTimer?.invalidate()
@@ -258,9 +258,9 @@ final class AppModel: ObservableObject {
             knownApps = try await historyStore.knownApps()
             storageStatistics = try await historyStore.statistics()
             if let quota = outcome.quota, quota.removedCount > 0 {
-                showStatus("Storage limit reached. Removed \(quota.removedCount) oldest unpinned entries.")
+                showStatus(L10n.text("Storage limit reached. Removed %@ oldest unpinned entries.", String(quota.removedCount)))
             } else if outcome.quota?.blockedByPinnedItems == true {
-                showStatus("Pinned entries exceed the storage limit. They were kept.")
+                showStatus(L10n.text("Pinned entries exceed the storage limit. They were kept."))
             }
         } catch is CancellationError {
             return
@@ -273,15 +273,15 @@ final class AppModel: ObservableObject {
         -> (payload: ClipPayload, sensitive: Bool)? {
         if clipboardAccessDenied != accessDenied {
             clipboardAccessDenied = accessDenied
-            showStatus(accessDenied ? "Clipboard access is blocked in System Settings."
-                : "Clipboard access is available again.",
+            showStatus(accessDenied ? L10n.text("Clipboard access is blocked in System Settings.")
+                : L10n.text("Clipboard access is available again."),
                        recovery: accessDenied ? .openClipboardSettings : nil)
         }
         let count = pasteboard.changeCount
         guard count != lastChangeCount else { return nil }
         lastChangeCount = count
         if accessDenied {
-            showStatus("Clipboard access is blocked in System Settings.", recovery: .openClipboardSettings)
+            showStatus(L10n.text("Clipboard access is blocked in System Settings."), recovery: .openClipboardSettings)
             return nil
         }
         if let sourceBundleID, excludedBundles.contains(sourceBundleID) { return nil }
@@ -293,7 +293,7 @@ final class AppModel: ObservableObject {
             return nil
         }
         if captured.sensitive && !storeSensitive {
-            showStatus("Sensitive clipboard content was not stored.")
+            showStatus(L10n.text("Sensitive clipboard content was not stored."))
             return nil
         }
         return captured
@@ -476,10 +476,10 @@ final class AppModel: ObservableObject {
                 return false
             }
             guard self.item(for: item.id) != nil else {
-                showStatus("The entry was removed because the storage limit was reached.")
+                showStatus(L10n.text("The entry was removed because the storage limit was reached."))
                 return false
             }
-            showStatus(note == nil ? "Note removed." : "Encrypted note saved.")
+            showStatus(note == nil ? L10n.text("Note removed.") : L10n.text("Encrypted note saved."))
             return true
         } catch {
             showStatus(error.localizedDescription)
@@ -493,16 +493,16 @@ final class AppModel: ObservableObject {
             return
         }
         guard let payload = payload(for: item.id) else {
-            showStatus("The entry is no longer available or has expired.")
+            showStatus(L10n.text("The entry is no longer available or has expired."))
             return
         }
         if payload.kind == .files,
            !(payload.filePaths ?? []).allSatisfy({ FileManager.default.fileExists(atPath: $0) }) {
-            showStatus("One or more original files are missing.")
+            showStatus(L10n.text("One or more original files are missing."))
             return
         }
         let success = writeToPasteboard(payload, sensitive: item.isSensitive)
-        guard success else { showStatus("Copy failed."); return }
+        guard success else { showStatus(L10n.text("Copy failed.")); return }
         lastChangeCount = pasteboard.changeCount
         var updatedHistory = true
         do {
@@ -511,23 +511,23 @@ final class AppModel: ObservableObject {
             refresh()
         } catch {
             updatedHistory = false
-            showStatus("Copied, but history could not be updated: \(error.localizedDescription)")
+            showStatus(L10n.text("Copied, but history could not be updated: %@", error.localizedDescription))
         }
-        finishCopy(updatedHistory ? "Copied!" : "Copied, but history could not be updated.")
+        finishCopy(updatedHistory ? L10n.text("Copied!") : L10n.text("Copied, but history could not be updated."))
     }
 
     private func copyFromStore(_ item: ClipSummary) async {
         guard let historyStore, let payload = await loadPayload(for: item.id) else {
-            showStatus("The entry is no longer available or has expired.")
+            showStatus(L10n.text("The entry is no longer available or has expired."))
             return
         }
         if payload.kind == .files,
            !(payload.filePaths ?? []).allSatisfy({ FileManager.default.fileExists(atPath: $0) }) {
-            showStatus("One or more original files are missing.")
+            showStatus(L10n.text("One or more original files are missing."))
             return
         }
         guard writeToPasteboard(payload, sensitive: item.isSensitive) else {
-            showStatus("Copy failed.")
+            showStatus(L10n.text("Copy failed."))
             return
         }
         lastChangeCount = pasteboard.changeCount
@@ -537,9 +537,9 @@ final class AppModel: ObservableObject {
                 sensitive: item.isSensitive, at: now(), quotaBytes: storageLimitBytes == 0 ? nil : storageLimitBytes
             )
             await refreshHistory(reset: true)
-            finishCopy("Copied!")
+            finishCopy(L10n.text("Copied!"))
         } catch {
-            finishCopy("Copied, but history could not be updated: \(error.localizedDescription)")
+            finishCopy(L10n.text("Copied, but history could not be updated: %@", error.localizedDescription))
         }
     }
 
@@ -580,7 +580,7 @@ final class AppModel: ObservableObject {
 
     private func pasteIntoPreviousApp() {
         guard AXIsProcessTrusted(), let previousApp else {
-            showStatus("Accessibility permission is missing for automatic paste. The content was copied.",
+            showStatus(L10n.text("Accessibility permission is missing for automatic paste. The content was copied."),
                        recovery: .openAccessibilitySettings)
             return
         }
@@ -602,14 +602,14 @@ final class AppModel: ObservableObject {
                       let url = URL(string: text),
                       ["http", "https"].contains(url.scheme?.lowercased() ?? "") else { return }
                 if systemIntegrationsEnabled { NSWorkspace.shared.open(url) }
-                else { showStatus("Test mode: URL checked; browser not opened.") }
+                else { showStatus(L10n.text("Test mode: URL checked; browser not opened.")) }
             }
             return
         }
         guard item.kind == .url, let text = payload(for: item.id)?.text,
               let url = URL(string: text), ["http", "https"].contains(url.scheme?.lowercased() ?? "") else { return }
         if systemIntegrationsEnabled { NSWorkspace.shared.open(url) }
-        else { showStatus("Test mode: URL checked; browser not opened.") }
+        else { showStatus(L10n.text("Test mode: URL checked; browser not opened.")) }
     }
 
     func pin(_ item: ClipSummary) {
@@ -636,7 +636,7 @@ final class AppModel: ObservableObject {
                     try await historyStore?.setFavoriteName(trimmed.isEmpty ? nil : trimmed, for: item.id)
                     if !trimmed.isEmpty { try await historyStore?.setPinned(true, for: item.id) }
                     await refreshHistory(reset: true)
-                    showStatus(trimmed.isEmpty ? "Favorite name removed." : "Favorite named and pinned.")
+                    showStatus(trimmed.isEmpty ? L10n.text("Favorite name removed.") : L10n.text("Favorite named and pinned."))
                 } catch { showStatus(error.localizedDescription) }
             }
             return
@@ -645,12 +645,12 @@ final class AppModel: ObservableObject {
             try $0.setFavoriteName(trimmed.isEmpty ? nil : trimmed, for: item.id)
             if !trimmed.isEmpty { try $0.setPinned(true, for: item.id) }
         }) else { return }
-        showStatus(trimmed.isEmpty ? "Favorite name removed." : "Favorite named and pinned.")
+        showStatus(trimmed.isEmpty ? L10n.text("Favorite name removed.") : L10n.text("Favorite named and pinned."))
     }
     func excludeSourceApp(of item: ClipSummary) {
         guard let bundle = item.sourceBundleID else { return }
         setExcluded(bundle, excluded: true)
-        showStatus("\(item.sourceName ?? bundle) will no longer be captured.")
+        showStatus(L10n.text("%@ will no longer be captured.", item.sourceName ?? bundle))
     }
     func markSensitive(_ item: ClipSummary, _ sensitive: Bool) {
         guard database != nil else {
@@ -668,7 +668,7 @@ final class AppModel: ObservableObject {
     }
     func setRetentionOverride(_ seconds: Int?, for item: ClipSummary) {
         guard !item.isSensitive || seconds == nil || Retention.sensitivePresets.contains(seconds!) else {
-            showStatus("Sensitive entries can be stored for no more than 24 hours.")
+            showStatus(L10n.text("Sensitive entries can be stored for no more than 24 hours."))
             return
         }
         guard database != nil else {
@@ -678,7 +678,7 @@ final class AppModel: ObservableObject {
                     await purgeAsync()
                     await refreshHistory(reset: true)
                     guard let current = self.item(for: item.id) else {
-                        showStatus("The entry was deleted because the selected retention period had already expired.")
+                        showStatus(L10n.text("The entry was deleted because the selected retention period had already expired."))
                         return
                     }
                     showRetentionStatus(current, seconds: seconds)
@@ -689,7 +689,7 @@ final class AppModel: ObservableObject {
         guard mutate({ try $0.setRetentionOverride(seconds: seconds, for: item.id) }) else { return }
         try? purge()
         guard let current = self.item(for: item.id) else {
-            showStatus("The entry was deleted because the selected retention period had already expired.")
+            showStatus(L10n.text("The entry was deleted because the selected retention period had already expired."))
             return
         }
         showRetentionStatus(current, seconds: seconds)
@@ -697,9 +697,9 @@ final class AppModel: ObservableObject {
     private func showRetentionStatus(_ item: ClipSummary, seconds: Int?) {
         if let deletionDate = item.deletionDate(normalDays: normalDays == 0 ? nil : normalDays,
                                                 sensitiveSeconds: TimeInterval(sensitiveSeconds)) {
-            showStatus("The entry will be deleted on \(deletionDate.formatted(Date.FormatStyle(date: .abbreviated, time: .shortened, locale: Locale(identifier: "en_US")))).")
+            showStatus(L10n.text("The entry will be deleted on %@.", deletionDate.formatted(date: .abbreviated, time: .shortened)))
         } else {
-            showStatus(seconds == nil ? "The global retention setting is used." : "The entry will not be deleted automatically.")
+            showStatus(seconds == nil ? L10n.text("The global retention setting is used.") : L10n.text("The entry will not be deleted automatically."))
         }
     }
     func delete(_ item: ClipSummary) {
@@ -727,7 +727,7 @@ final class AppModel: ObservableObject {
                     await refreshHistory(reset: true)
                     knownApps = try await historyStore.knownApps()
                     storageStatistics = try await historyStore.statistics()
-                    showStatus(deleted == 0 ? "History is already empty." : "Deleted all history (\(deleted) entries).")
+                    showStatus(deleted == 0 ? L10n.text("History is already empty.") : L10n.text("Deleted all history (%@ entries).", String(deleted)))
                 } catch { showStatus(error.localizedDescription) }
             }
             return
@@ -735,7 +735,7 @@ final class AppModel: ObservableObject {
         do {
             let deleted = try database.deleteAll()
             refresh()
-            showStatus(deleted == 0 ? "History is already empty." : "Deleted all history (\(deleted) entries).")
+            showStatus(deleted == 0 ? L10n.text("History is already empty.") : L10n.text("Deleted all history (%@ entries).", String(deleted)))
         } catch {
             showStatus(error.localizedDescription)
         }
@@ -747,8 +747,8 @@ final class AppModel: ObservableObject {
                 refresh()
                 knownApps = try database.knownApps()
                 storageStatistics = try database.statistics()
-                showStatus(deleted == 0 ? "There is no unpinned history to delete."
-                                        : "Deleted \(deleted) unpinned entries. Favorites were kept.")
+                showStatus(deleted == 0 ? L10n.text("There is no unpinned history to delete.")
+                                        : L10n.text("Deleted %@ unpinned entries. Favorites were kept.", String(deleted)))
             } catch { showStatus(error.localizedDescription) }
             return
         }
@@ -762,8 +762,8 @@ final class AppModel: ObservableObject {
                 await refreshHistory(reset: true)
                 knownApps = try await historyStore.knownApps()
                 storageStatistics = try await historyStore.statistics()
-                showStatus(deleted == 0 ? "There is no unpinned history to delete."
-                                        : "Deleted \(deleted) unpinned entries. Favorites were kept.")
+                showStatus(deleted == 0 ? L10n.text("There is no unpinned history to delete.")
+                                        : L10n.text("Deleted %@ unpinned entries. Favorites were kept.", String(deleted)))
             } catch { showStatus(error.localizedDescription) }
         }
     }
@@ -779,9 +779,9 @@ final class AppModel: ObservableObject {
         if result {
             shortcut = value
             defaults.set(try? JSONEncoder().encode(value), forKey: "shortcut")
-            showStatus(value == nil ? "Keyboard shortcut disabled." : "Keyboard shortcut saved.")
+            showStatus(value == nil ? L10n.text("Keyboard shortcut disabled.") : L10n.text("Keyboard shortcut saved."))
         } else {
-            showStatus("That keyboard shortcut is already in use. Choose another one.", recovery: .openSmartClipSettings)
+            showStatus(L10n.text("That keyboard shortcut is already in use. Choose another one."), recovery: .openSmartClipSettings)
         }
     }
     var onOpenHistory: (() -> Void)?
@@ -803,19 +803,19 @@ final class AppModel: ObservableObject {
         defaults.set(false, forKey: "paused")
         pauseMode = .until(end)
         schedulePauseTimer(seconds: seconds)
-        showStatus("Capture paused until \(end.formatted(Date.FormatStyle(date: .omitted, time: .shortened, locale: Locale(identifier: "en_US")))).")
+        showStatus(L10n.text("Capture paused until %@.", end.formatted(date: .omitted, time: .shortened)))
     }
     func pauseUntilRestart() {
         pauseTimer?.invalidate()
         pauseTimer = nil
         defaults.set(false, forKey: "paused")
         pauseMode = .untilRestart
-        showStatus("Capture paused until the next launch.")
+        showStatus(L10n.text("Capture paused until the next launch."))
     }
     func updateTimedPause(at date: Date? = nil) {
         guard case .until(let end) = pauseMode, (date ?? now()) >= end else { return }
         setPaused(false)
-        showStatus("Capture resumed automatically.")
+        showStatus(L10n.text("Capture resumed automatically."))
     }
     private func schedulePauseTimer(seconds: TimeInterval) {
         pauseTimer?.invalidate()
@@ -852,8 +852,8 @@ final class AppModel: ObservableObject {
     func setStoreSensitive(_ value: Bool) {
         storeSensitive = value
         defaults.set(value, forKey: "storeSensitive")
-        showStatus(value ? "Sensitive entries will use the selected short retention period."
-                         : "Sensitive clipboard content will no longer be stored.")
+        showStatus(value ? L10n.text("Sensitive entries will use the selected short retention period.")
+                         : L10n.text("Sensitive clipboard content will no longer be stored."))
     }
     func setStorageLimitBytes(_ value: Int64) {
         storageLimitBytes = max(0, value)
@@ -870,9 +870,9 @@ final class AppModel: ObservableObject {
                     if storageLimitBytes > 0 {
                         let result = try await historyStore.enforceQuota(bytes: storageLimitBytes)
                         if result.blockedByPinnedItems {
-                            showStatus("Pinned entries exceed the selected limit. They were kept.")
+                            showStatus(L10n.text("Pinned entries exceed the selected limit. They were kept."))
                         } else if result.removedCount > 0 {
-                            showStatus("Removed \(result.removedCount) old entries to meet the storage limit.")
+                            showStatus(L10n.text("Removed %@ old entries to meet the storage limit.", String(result.removedCount)))
                         }
                     }
                     await refreshHistory(reset: true)
@@ -914,20 +914,20 @@ final class AppModel: ObservableObject {
         defaults.set(Array(excludedBundles).sorted(), forKey: "excludedBundles")
     }
     func setAutoStart(_ enabled: Bool) {
-        guard systemIntegrationsEnabled else { showStatus("Launch at login is disabled in test mode."); return }
+        guard systemIntegrationsEnabled else { showStatus(L10n.text("Launch at login is disabled in test mode.")); return }
         do {
             if enabled { try SMAppService.mainApp.register() }
             else { try SMAppService.mainApp.unregister() }
-            showStatus(enabled ? "Launch at login enabled." : "Launch at login disabled.")
-        } catch { showStatus("Autostart: \(error.localizedDescription)") }
+            showStatus(enabled ? L10n.text("Launch at login enabled.") : L10n.text("Launch at login disabled."))
+        } catch { showStatus(L10n.text("Autostart: %@", error.localizedDescription)) }
     }
     var autoStartEnabled: Bool { SMAppService.mainApp.status == .enabled }
 
     func checkPermissions() {
         if accessibilityPermissionGranted {
-            showStatus("Permissions are ready. SmartClip can paste into the previous app.")
+            showStatus(L10n.text("Permissions are ready. SmartClip can paste into the previous app."))
         } else {
-            showStatus("Accessibility permission is needed for automatic paste.",
+            showStatus(L10n.text("Accessibility permission is needed for automatic paste."),
                        recovery: .openAccessibilitySettings)
         }
     }
@@ -958,7 +958,7 @@ final class AppModel: ObservableObject {
     private func openSystemSettings(_ pane: String) {
         guard systemIntegrationsEnabled,
               let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?\(pane)") else {
-            showStatus("System Settings are disabled in test mode.")
+            showStatus(L10n.text("System Settings are disabled in test mode."))
             return
         }
         NSWorkspace.shared.open(url)
