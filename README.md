@@ -133,7 +133,7 @@ styled DMG, verifies the package, signs the update with Sparkle EdDSA, creates a
 GitHub Release, and publishes the appcast through GitHub Pages.
 
 ```sh
-zsh scripts/package-release.sh v0.5.0
+zsh scripts/package-release.sh v0.5.1
 ```
 
 See the [release guide](docs/RELEASE.md), [test report](docs/TEST_REPORT.md), and
