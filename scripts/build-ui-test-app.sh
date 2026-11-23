@@ -13,9 +13,14 @@ cp Resources/Info.plist "$app/Contents/Info.plist"
 cp Resources/AppIcon.icns "$app/Contents/Resources/AppIcon.icns"
 resource_bundle=".build/debug/SmartClip_SmartClip.bundle"
 [[ -d "$resource_bundle" ]] || { echo "Missing localization bundle: $resource_bundle" >&2; exit 1; }
-localization_root="$resource_bundle/Contents/Resources"
-[[ -d "$localization_root" ]] || { echo "Missing localization resources: $localization_root" >&2; exit 1; }
-for localization in "$localization_root"/*.lproj(N); do
+if [[ -d "$resource_bundle/Contents/Resources" ]]; then
+  localization_root="$resource_bundle/Contents/Resources"
+else
+  localization_root="$resource_bundle"
+fi
+for language in en de zh-Hans ja ko; do
+  localization="$localization_root/$language.lproj"
+  [[ -d "$localization" ]] || { echo "Missing localization resources: $localization" >&2; exit 1; }
   cp -R "$localization" "$app/Contents/Resources/"
 done
 zsh scripts/embed-sparkle.sh debug "$app"
